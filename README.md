@@ -106,4 +106,4 @@ Pasar revisión y merge
 
 Licencia
 
-Este proyecto utiliza la licencia MIT.
+
