@@ -281,7 +281,7 @@ test('ciclos: validación de fechas, cierre y activación', async () => {
   assert.equal(act.data.status, 'activo');
 });
 
-test('WebSocket en tiempo real recibe eventos', async () => {
+test('WebSocket en tiempo real recibe eventos', { skip: typeof WebSocket === 'undefined' && 'requiere Node 22+' }, async () => {
   const ws = new WebSocket(`${base.replace('http', 'ws')}/ws?token=${tokens.guarda}`);
   const events = [];
   await new Promise((resolve, reject) => {

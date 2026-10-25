@@ -59,11 +59,12 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Dirección de la API. Ejemplos:\n'
+              'Dirección de la API. Por defecto: la nube\n'
+              '(${Session.cloudServer}).\n'
+              'Para pruebas locales:\n'
               '• Emulador Android: http://10.0.2.2:3000\n'
               '• Windows / simulador iOS: http://localhost:3000\n'
-              '• Celular real: http://IP-DE-SU-PC:3000\n'
-              '• En la nube: https://su-api.onrender.com',
+              '• Celular en la misma Wi-Fi: http://IP-DE-SU-PC:3000',
               style: TextStyle(fontSize: 13, color: AppColors.muted),
             ),
             const SizedBox(height: 12),
@@ -71,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, Session.defaultServer), child: const Text('Por defecto')),
+          TextButton(onPressed: () => Navigator.pop(ctx, Session.defaultServer), child: const Text('Nube (por defecto)')),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Guardar')),
         ],

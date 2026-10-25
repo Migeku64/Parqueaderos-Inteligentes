@@ -64,10 +64,12 @@ Usuarios de prueba:
 
 | Dónde corre la app | Dirección del servidor |
 |---|---|
-| Emulador de Android | `http://10.0.2.2:3000` (ya viene por defecto) |
-| Windows / simulador iOS | `http://localhost:3000` (por defecto) |
+| **Cualquier dispositivo, cualquier red (por defecto)** | `https://parqueadero-api-ynr1.onrender.com` |
+| Emulador de Android con backend local | `http://10.0.2.2:3000` |
+| Windows con backend local | `http://localhost:3000` |
 | Celular real en la misma red Wi-Fi | `http://IP-DE-SU-PC:3000` (vea la IP con `ipconfig`) |
-| API publicada en la nube | `https://su-api.onrender.com` (por ejemplo) |
+
+> La API en la nube usa el plan gratuito de Render: si nadie la usa por 15 minutos se "duerme" y el primer ingreso tarda ~50 segundos.
 
 > Si usa un celular real, permita el puerto 3000 en el Firewall de Windows.
 
@@ -194,7 +196,7 @@ El archivo `render.yaml` permite crear el servicio en Render con *New → Bluepr
 ```bash
 cd backend
 # usa una base separada para no borrar sus datos
-DATABASE_URL=postgres://postgres:CLAVE@localhost:5432/parqueadero_test npm test     # 14 pruebas de integración
+DATABASE_URL=postgres://postgres:CLAVE@localhost:5432/parqueadero_test npm test     # 15 pruebas de integración
 cd ../app
 flutter test
 ```

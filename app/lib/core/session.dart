@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,12 +57,12 @@ class Session extends ChangeNotifier {
   bool ready = false;
   StreamSubscription<RtEvent>? _sub;
 
-  /// Dirección por defecto del servidor.
-  /// En el emulador de Android, 10.0.2.2 apunta al computador donde corre el backend.
-  static String get defaultServer {
-    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
-  }
+  /// API publicada en la nube (Render + Neon): funciona con Wi-Fi o datos móviles.
+  static const cloudServer = 'https://parqueadero-api-ynr1.onrender.com';
+
+  /// Dirección por defecto del servidor: la de la nube.
+  /// (Para pruebas locales use el engranaje: emulador http://10.0.2.2:3000, PC http://localhost:3000.)
+  static String get defaultServer => cloudServer;
 
   String get serverUrl => api.baseUrl;
 
