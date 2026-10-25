@@ -1,0 +1,23 @@
+# Despliegue en Render (https://render.com) — plan gratuito.
+# En Render: New + -> Blueprint -> elegir este repositorio. Pedirá DATABASE_URL (la de Neon).
+services:
+  - type: web
+    name: parqueadero-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    # Crea las tablas si no existen, carga datos de demostración solo si la base está vacía y arranca
+    startCommand: node scripts/migrate.js && node scripts/seed.js && node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "20"
+      - key: BACKUP_INTERVAL_HOURS
+        value: "24"

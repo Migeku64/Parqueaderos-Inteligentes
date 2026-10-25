@@ -1,0 +1,934 @@
+{
+  "info": {
+    "name": "Parqueadero Comunitario API",
+    "description": "Pruebas de la API (Node.js + PostgreSQL). Ejecute primero las carpetas '1. Login'. El token se guarda solo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "token_guarda",
+      "value": ""
+    },
+    {
+      "key": "token_residente",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login",
+      "item": [
+        {
+          "name": "Salud del servidor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/health",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login administrador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/login",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('token', j.token);",
+                  "pm.test('login correcto', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login guarda",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/login",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"guarda\",\n  \"password\": \"guarda123\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('token_guarda', j.token);",
+                  "pm.test('login correcto', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login residente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/login",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"casa150\",\n  \"password\": \"residente123\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('token_residente', j.token);",
+                  "pm.test('login correcto', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mi usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/auth/me",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Residentes y vehículos (RF01, RF02)",
+      "item": [
+        {
+          "name": "Listar residentes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/residents",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Buscar por placa / nombre / casa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/residents?q=ABC123",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "ABC123"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Ver residente 1 (con historial)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/residents/1",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents",
+                "1"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Crear residente con vehículo y usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/residents",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Residente de Prueba\",\n  \"document_number\": \"1099888777\",\n  \"house_number\": \"299\",\n  \"phone\": \"3001112233\",\n  \"vehicle\": {\n    \"plate\": \"PRU123\",\n    \"type\": \"carro\"\n  },\n  \"account\": {\n    \"username\": \"prueba1\",\n    \"password\": \"residente123\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Actualizar deuda de residente 1",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/residents/1",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents",
+                "1"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"debt\": 0,\n  \"admin_score\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Agregar vehículo a residente 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/residents/1/vehicles",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "residents",
+                "1",
+                "vehicles"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"MOT45B\",\n  \"type\": \"moto\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Celdas y disponibilidad (RF04, RF16)",
+      "item": [
+        {
+          "name": "Mapa de celdas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/spots",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "spots"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Resumen libres / ocupadas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/spots/summary",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "spots",
+                "summary"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Dashboard (RF14)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/dashboard",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Ciclos y sorteo IPA (RF03, RF17)",
+      "item": [
+        {
+          "name": "Listar ciclos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/cycles",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "cycles"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Elegibilidad e IPA del ciclo 3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/cycles/3/eligibility",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "cycles",
+                "3",
+                "eligibility"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Simular sorteo ciclo 3 (no guarda)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/cycles/3/draw/preview",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "cycles",
+                "3",
+                "draw",
+                "preview"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"prioridad\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Ejecutar sorteo ciclo 3 (guarda)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/cycles/3/draw",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "cycles",
+                "3",
+                "draw"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"ponderado\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Asignaciones del ciclo 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/cycles/2",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "cycles",
+                "2"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Historial de asignaciones (RF10)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/assignments",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "assignments"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Entradas y salidas (RF05, RF06)",
+      "item": [
+        {
+          "name": "Consultar placa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/movements/check/ABC123",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "movements",
+                "check",
+                "ABC123"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_guarda}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Registrar SALIDA (guarda) - el carro ya estaba adentro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/movements",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "movements"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"ABC123\",\n  \"type\": \"salida\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_guarda}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Registrar ENTRADA (guarda) - le indica su celda",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/movements",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "movements"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"ABC123\",\n  \"type\": \"entrada\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_guarda}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ingreso NO autorizado (placa desconocida)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/movements",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "movements"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"ZZZ999\",\n  \"type\": \"entrada\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_guarda}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Historial de movimientos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/movements",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "movements"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Reportes, auditoría y respaldos (RF08, RF15, RF19, RF20)",
+      "item": [
+        {
+          "name": "Reporte ocupación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/reports/ocupacion",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "reports",
+                "ocupacion"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Reporte ciclos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/reports/ciclos",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "reports",
+                "ciclos"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Reporte movimientos en CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/reports/movimientos?format=csv",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "reports",
+                "movimientos"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Auditoría",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/audit",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Generar respaldo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/backups",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "backups"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Listar respaldos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/backups",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "backups"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Seguridad (RF07, RF11, RF18)",
+      "item": [
+        {
+          "name": "Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/users",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Login con clave incorrecta (5 veces = bloqueo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/login",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"casa101\",\n  \"password\": \"mala\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Residente intenta ver usuarios (debe dar 403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/users",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_residente}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Vista del residente (mockup Sorteos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/me/summary",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "me",
+                "summary"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_residente}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

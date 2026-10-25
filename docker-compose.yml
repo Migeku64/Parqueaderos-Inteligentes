@@ -1,0 +1,35 @@
+# Levanta PostgreSQL + la API con un solo comando:   docker compose up --build
+# API en http://localhost:3000  (usuarios de prueba: admin/admin123, guarda/guarda123, mpinilla/residente123)
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: parqueadero
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/parqueadero
+      JWT_SECRET: cambie-este-secreto
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - backups:/app/backups
+
+volumes:
+  pgdata:
+  backups:

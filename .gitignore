@@ -1,0 +1,23 @@
+# Backend
+backend/node_modules/
+backend/.env
+backend/backups/
+
+# Flutter
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/.idea/
+app/*.iml
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/ios/Pods/
+app/ios/.symlinks/
+app/windows/flutter/ephemeral/
+app/pubspec.lock
+
+.DS_Store
+.vscode/
