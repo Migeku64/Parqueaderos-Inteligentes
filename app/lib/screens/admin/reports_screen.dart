@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
+import '../../core/files.dart';
 import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
@@ -63,9 +63,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   static const _formats = {
-    'pdf': ('PDF', 'Se guardó el reporte en PDF:'),
-    'xlsx': ('Excel (.xlsx)', 'Se guardó el reporte de Excel:'),
-    'csv': ('CSV', 'Se guardó el archivo CSV (se abre con Excel):'),
+    'pdf': ('PDF', 'Reporte en PDF'),
+    'xlsx': ('Excel (.xlsx)', 'Reporte de Excel'),
+    'csv': ('CSV', 'Archivo CSV (se abre con Excel)'),
   };
 
   Future<void> _export(String format) async {
@@ -73,43 +73,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
         context, () => session.api.getBytes('/reports/$_type', query: {..._query, 'format': format}));
     if (bytes == null || !mounted) return;
     final name = 'reporte-$_type-${isoDate(DateTime.now())}.$format';
+    File file;
     try {
-      Directory? dir;
-      try {
-        dir = await getDownloadsDirectory();
-      } catch (_) {
-        dir = null;
-      }
-      dir ??= await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}${Platform.pathSeparator}$name');
-      await file.writeAsBytes(bytes, flush: true);
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Reporte exportado'),
-          content: SelectableText('${_formats[format]!.$2}\n\n${file.path}'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: file.path));
-                Navigator.pop(ctx);
-                showSnack(context, 'Ruta copiada al portapapeles');
-              },
-              child: const Text('Copiar ruta'),
-            ),
-            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Listo')),
-          ],
-        ),
-      );
+      file = await AppFiles.save(name, bytes);
     } catch (e) {
       if (format == 'csv') {
-        await Clipboard.setData(ClipboardData(text: utf8.decode(bytes)));
+        await Clipboard.setData(ClipboardData(text: utf8.decode(bytes, allowMalformed: true)));
         if (mounted) showSnack(context, 'No se pudo guardar el archivo; el CSV se copió al portapapeles.');
       } else if (mounted) {
         showSnack(context, 'No se pudo guardar el archivo en este dispositivo.');
       }
+      return;
     }
+    // Se abre de inmediato con el visor del dispositivo (PDF, Excel...)
+    final opened = await AppFiles.open(file);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reporte exportado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(opened
+                ? '${_formats[format]!.$2} generado y abierto.'
+                : '${_formats[format]!.$2} generado. No se encontró una aplicación para abrirlo: '
+                    'puede compartirlo o instalar un visor de ${format == 'pdf' ? 'PDF' : 'hojas de cálculo'}.'),
+            const SizedBox(height: 12),
+            const Text('Guardado en:', style: TextStyle(fontWeight: FontWeight.bold)),
+            SelectableText(file.path, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              final ok = await AppFiles.open(file);
+              if (!ok && ctx.mounted) showSnack(ctx, 'No hay una aplicación para abrir este archivo.');
+            },
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Abrir'),
+          ),
+          if (AppFiles.canShare)
+            TextButton.icon(
+              onPressed: () => AppFiles.share(file, text: 'Reporte del parqueadero comunitario'),
+              icon: const Icon(Icons.share),
+              label: const Text('Compartir'),
+            ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Listo')),
+        ],
+      ),
+    );
   }
 
   @override
