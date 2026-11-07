@@ -45,6 +45,11 @@ BACKUP_INTERVAL_HOURS=24
 BACKUP_KEEP=30
 MAX_FAILED_LOGINS=5
 PLATE_READER_KEY=
+BREVO_API_KEY=
+EMAIL_FROM=
+EMAIL_FROM_NAME=Parqueadero Comunitario Nueva Castilla
+EMAIL_ADMINS=
+EMAIL_REDIRECT_TO=
 "@
 Set-Content -Path ".env" -Value $envText -Encoding Ascii
 Write-Host "Archivo .env creado."

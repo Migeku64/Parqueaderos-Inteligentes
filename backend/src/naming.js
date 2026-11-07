@@ -87,6 +87,7 @@ export const COLUMNS = {
   file_name: 'nombre_archivo',
   size_bytes: 'tamano_bytes',
   trigger: 'disparador',
+  emailed_at: 'correo_enviado_en',
 };
 
 const TO_API = Object.fromEntries(Object.entries(COLUMNS).map(([api, db]) => [db, api]));

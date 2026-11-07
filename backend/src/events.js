@@ -1,6 +1,7 @@
 // Auditoría (RF15) y notificaciones automáticas (RF13).
 import { sql } from './db.js';
 import { broadcast } from './ws.js';
+import { queueNotificationEmails } from './services/email.js';
 
 export async function audit(tx, userId, action, entityName = null, entityId = null, details = null) {
   await (tx || sql)`
@@ -32,7 +33,9 @@ export async function notify(n, tx) {
     body: n.body || '',
     kind: n.kind || 'info',
   }));
-  await db`INSERT INTO notificacion ${db(rows)}`;
+  const created = await db`INSERT INTO notificacion ${db(rows)} RETURNING id`;
+  // Copia por correo electrónico a residentes con correo y a la administración (si está configurado)
+  queueNotificationEmails(created.map((r) => r.id));
   broadcast('notification', { title: n.title, body: n.body || '', kind: n.kind || 'info' }, { userIds: ids });
   return ids.length;
 }

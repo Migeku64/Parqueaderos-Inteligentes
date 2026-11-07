@@ -197,7 +197,39 @@ El archivo `render.yaml` permite crear el servicio en Render con *New → Bluepr
 
 ---
 
-## 8. Pruebas
+## 8. Notificaciones por correo (Brevo)
+
+Además de la campanita de la app, el sistema envía cada notificación por **correo electrónico**:
+a cada residente (al correo registrado en su ficha) y a la administración (a los correos de `EMAIL_ADMINS`).
+Se usa la API de **Brevo** por HTTPS porque el plan gratuito de Render **bloquea el envío por SMTP**
+(puertos 25, 465 y 587). El plan gratuito de Brevo permite 300 correos al día.
+
+**Configurar (una vez):**
+1. Cree una cuenta gratuita en https://www.brevo.com.
+2. En **Senders, Domains & Dedicated IPs → Senders** agregue el correo remitente (por ejemplo un Gmail del
+   proyecto) y confírmelo con el enlace que le llega.
+3. En **SMTP & API → API Keys** cree una clave (empieza por `xkeysib-`).
+4. Abra `backend/.env` y complete:
+   ```
+   BREVO_API_KEY=xkeysib-...
+   EMAIL_FROM=correo-remitente-verificado@gmail.com
+   EMAIL_ADMINS=correo1@gmail.com,correo2@gmail.com
+   ```
+5. Pruebe: dentro de `backend/` ejecute `npm run correo:prueba -- su-correo@gmail.com`.
+6. Reinicie la API (`INICIAR.bat`). En Render, ponga las mismas variables en **Environment**.
+
+> Los residentes de demostración tienen correos inventados (`@correo.com`). Para la sustentación ponga
+> `EMAIL_REDIRECT_TO=su-correo@gmail.com`: todos los correos llegarán a esa dirección, con el destinatario
+> original en el asunto. Si `BREVO_API_KEY` está vacío, el sistema funciona igual pero sin correos.
+
+Correos que recibe el **residente**: sorteo programado, resultado del sorteo (celda asignada o lista de espera),
+asignación manual o cancelada, inicio de su turno, aviso 7 días antes del fin del ciclo y fin del ciclo.
+Correos de la **administración**: ingreso no autorizado, usuario bloqueado, solicitud de recuperación de
+contraseña, ciclo por terminar y falla del respaldo automático.
+
+---
+
+## 9. Pruebas
 
 ```bash
 cd backend

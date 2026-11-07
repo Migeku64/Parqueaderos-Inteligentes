@@ -12,6 +12,25 @@ process.env.BACKUP_DIR = path.join(process.env.TMPDIR || '/tmp', 'parq-test-back
 process.env.PLATE_READER_KEY = 'lector-123';
 if (!process.env.DATABASE_URL) process.env.DATABASE_URL = 'postgres://postgres@127.0.0.1:5432/parqueadero_test';
 
+// Servidor que simula la API de Brevo para probar los correos sin enviarlos de verdad
+import http from 'node:http';
+const sentMails = [];
+const brevo = http.createServer((req, res) => {
+  let data = '';
+  req.on('data', (c) => (data += c));
+  req.on('end', () => {
+    sentMails.push({ key: req.headers['api-key'], body: JSON.parse(data) });
+    res.writeHead(201, { 'Content-Type': 'application/json' });
+    res.end('{"messageId":"<prueba>"}');
+  });
+});
+await new Promise((r) => brevo.listen(0, '127.0.0.1', r));
+process.env.BREVO_API_KEY = 'clave-brevo-prueba';
+process.env.BREVO_API_URL = `http://127.0.0.1:${brevo.address().port}/v3/smtp/email`;
+process.env.EMAIL_FROM = 'parqueadero@prueba.co';
+process.env.EMAIL_ADMINS = 'admin1@prueba.co, admin2@prueba.co';
+process.env.EMAIL_DELAY_MS = '20';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 execFileSync('node', ['scripts/migrate.js', '--reset'], { cwd: root, env: process.env, stdio: 'ignore' });
 execFileSync('node', ['scripts/seed.js'], { cwd: root, env: process.env, stdio: 'ignore' });
@@ -317,3 +336,19 @@ test('cambio de contraseña', async () => {
   const login = await api('POST', '/auth/login', { username: 'casa150', password: 'nueva123' }, null);
   assert.equal(login.status, 200);
 });
+
+test('notificaciones por correo: residentes y administración (Brevo)', async () => {
+  await new Promise((r) => setTimeout(r, 500));
+  assert.ok(sentMails.length > 0, 'se enviaron correos');
+  assert.ok(sentMails.every((m) => m.key === 'clave-brevo-prueba' && m.body.sender.email === 'parqueadero@prueba.co'));
+  const toResident = sentMails.find((m) => m.body.to[0].email.endsWith('@correo.com'));
+  assert.ok(toResident, 'correo a un residente');
+  assert.ok(toResident.body.htmlContent.includes(toResident.body.subject.replace(/&/g, '&amp;')) || toResident.body.textContent.includes(toResident.body.subject));
+  const toAdmins = sentMails.find((m) => m.body.to.length === 2 && m.body.to[0].email === 'admin1@prueba.co');
+  assert.ok(toAdmins, 'alerta a la administración');
+  const [{ n }] = await sql`SELECT count(*)::int AS n FROM notificacion WHERE correo_enviado_en IS NOT NULL`;
+  assert.ok(n > 0, 'quedó registrada la fecha de envío');
+});
+
+after(() => brevo.close());
+

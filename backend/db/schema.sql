@@ -166,8 +166,11 @@ CREATE TABLE IF NOT EXISTS notificacion (
   categoria          VARCHAR(30)  NOT NULL DEFAULT 'info',
   creado_en          TIMESTAMPTZ  NOT NULL DEFAULT now(),
   leido_en           TIMESTAMPTZ,
+  correo_enviado_en  TIMESTAMPTZ,
   CONSTRAINT notificacion_destino_ck CHECK (cuenta_usuario_id IS NOT NULL OR rol_destino IS NOT NULL)
 );
+-- Bases creadas antes de las notificaciones por correo
+ALTER TABLE notificacion ADD COLUMN IF NOT EXISTS correo_enviado_en TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS notificacion_usuario_idx ON notificacion(cuenta_usuario_id, creado_en DESC);
 
 -- ---------------------------------------------------------------------

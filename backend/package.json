@@ -13,7 +13,8 @@
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
     "db:reset": "node scripts/migrate.js --reset && node scripts/seed.js",
-    "test": "node --test --test-concurrency=1 test/api.test.js"
+    "test": "node --test --test-concurrency=1 test/api.test.js",
+    "correo:prueba": "node scripts/probar_correo.js"
   },
   "dependencies": {
     "postgres": "^3.4.5"

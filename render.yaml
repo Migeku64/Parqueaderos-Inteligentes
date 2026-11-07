@@ -21,3 +21,12 @@ services:
         value: "22"
       - key: BACKUP_INTERVAL_HOURS
         value: "24"
+      # Notificaciones por correo con Brevo (ver README). Render gratuito bloquea SMTP.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_ADMINS
+        sync: false
+      - key: EMAIL_REDIRECT_TO
+        sync: false
