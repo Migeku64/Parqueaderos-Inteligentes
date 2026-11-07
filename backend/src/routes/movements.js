@@ -10,20 +10,20 @@ import { spotsChanged } from './spots.js';
 /** Busca el vehículo, su residente y la asignación vigente del ciclo activo. */
 export async function lookupPlate(plate, db = sql) {
   const [v] = await db`
-    SELECT v.id AS vehicle_id, v.plate, v.type, v.brand, v.model, v.color, v.is_active,
-           r.id AS resident_id, r.full_name, r.status AS resident_status,
-           CASE WHEN h.block = '' THEN h.number ELSE h.block || '-' || h.number END AS house
-    FROM vehicle v JOIN resident r ON r.id = v.resident_id JOIN house h ON h.id = r.house_id
-    WHERE v.plate = ${plate}`;
+    SELECT v.id AS vehiculo_id, v.placa, v.tipo, v.marca, v.modelo, v.color, v.activo,
+           r.id AS residente_id, r.nombre_completo, r.estado AS resident_status,
+           CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house
+    FROM vehiculo v JOIN residente r ON r.id = v.residente_id JOIN vivienda h ON h.id = r.vivienda_id
+    WHERE v.placa = ${plate}`;
   if (!v) return { plate, vehicle: null, assignment: null, inside: false };
   const [a] = await db`
-    SELECT pa.id, pa.parking_spot_id, s.code AS spot_code, s.is_occupied, c.name AS cycle_name, c.end_date
-    FROM parking_assignment pa
-    JOIN cycle c ON c.id = pa.cycle_id JOIN parking_spot s ON s.id = pa.parking_spot_id
-    WHERE pa.resident_id = ${v.resident_id} AND pa.status = 'vigente' AND c.status = 'activo'
+    SELECT pa.id, pa.celda_id, s.codigo AS spot_code, s.ocupada, c.nombre AS cycle_name, c.fecha_fin
+    FROM asignacion pa
+    JOIN ciclo c ON c.id = pa.ciclo_id JOIN celda s ON s.id = pa.celda_id
+    WHERE pa.residente_id = ${v.resident_id} AND pa.estado = 'vigente' AND c.estado = 'activo'
     LIMIT 1`;
   const [last] = await db`
-    SELECT type FROM vehicle_movement WHERE plate = ${plate} AND authorized ORDER BY recorded_at DESC, id DESC LIMIT 1`;
+    SELECT tipo FROM movimiento_vehiculo WHERE placa = ${plate} AND autorizado ORDER BY registrado_en DESC, id DESC LIMIT 1`;
   return { plate, vehicle: v, assignment: a || null, inside: last?.type === 'entrada' };
 }
 
@@ -53,24 +53,24 @@ async function registerMovement({ plate: rawPlate, type, userId, source = 'manua
         throw new HttpError(409, `El vehículo ${plate} ya tiene una entrada registrada (celda ${info.assignment.spot_code})`);
       } else {
         spotId = info.assignment.parking_spot_id;
-        await tx`UPDATE parking_spot SET is_occupied = TRUE WHERE id = ${spotId}`;
+        await tx`UPDATE celda SET ocupada = TRUE WHERE id = ${spotId}`;
       }
     } else {
       if (!info.inside) reason = 'Salida sin entrada registrada';
       // Libera la celda en la que estaba (la de su asignación o la de su última entrada)
       const [lastIn] = await tx`
-        SELECT parking_spot_id FROM vehicle_movement
-        WHERE plate = ${plate} AND type = 'entrada' AND authorized ORDER BY recorded_at DESC, id DESC LIMIT 1`;
+        SELECT celda_id FROM movimiento_vehiculo
+        WHERE placa = ${plate} AND tipo = 'entrada' AND autorizado ORDER BY registrado_en DESC, id DESC LIMIT 1`;
       spotId = info.assignment?.parking_spot_id ?? lastIn?.parking_spot_id ?? null;
-      if (spotId && info.inside) await tx`UPDATE parking_spot SET is_occupied = FALSE WHERE id = ${spotId}`;
+      if (spotId && info.inside) await tx`UPDATE celda SET ocupada = FALSE WHERE id = ${spotId}`;
     }
 
     const [m] = await tx`
-      INSERT INTO vehicle_movement (plate, vehicle_id, parking_spot_id, assignment_id, type, authorized, source, reason, recorded_by)
+      INSERT INTO movimiento_vehiculo (placa, vehiculo_id, celda_id, asignacion_id, tipo, autorizado, origen, motivo, registrado_por)
       VALUES (${plate}, ${info.vehicle?.vehicle_id ?? null}, ${spotId}, ${info.assignment?.id ?? null},
               ${type}, ${authorized}, ${source}, ${reason}, ${userId ?? null})
       RETURNING *`;
-    await audit(tx, userId, authorized ? `registro_${type}` : 'ingreso_rechazado', 'vehicle_movement', m.id, { placa: plate, motivo: reason });
+    await audit(tx, userId, authorized ? `registro_${type}` : 'ingreso_rechazado', 'movimiento_vehiculo', m.id, { placa: plate, motivo: reason });
     if (!authorized) {
       await notify(
         {
@@ -131,18 +131,18 @@ export default function movementRoutes(r) {
     const plate = normalizePlate(q.plate);
     const limit = Math.min(Number(q.limit) || 200, 2000);
     return sql`
-      SELECT m.*, s.code AS spot_code, ua.username AS recorded_by_username,
-             r.full_name AS resident_name
-      FROM vehicle_movement m
-      LEFT JOIN parking_spot s ON s.id = m.parking_spot_id
-      LEFT JOIN user_account ua ON ua.id = m.recorded_by
-      LEFT JOIN vehicle v ON v.id = m.vehicle_id
-      LEFT JOIN resident r ON r.id = v.resident_id
-      WHERE (${plate} = '' OR m.plate LIKE ${'%' + plate + '%'})
-        AND (${q.from || null}::date IS NULL OR m.recorded_at >= ${q.from || null}::date)
-        AND (${q.to || null}::date IS NULL OR m.recorded_at < ${q.to || null}::date + 1)
-        AND (${q.authorized ?? null}::boolean IS NULL OR m.authorized = ${q.authorized ?? null}::boolean)
-      ORDER BY m.recorded_at DESC, m.id DESC
+      SELECT m.*, s.codigo AS spot_code, ua.usuario AS recorded_by_username,
+             r.nombre_completo AS resident_name
+      FROM movimiento_vehiculo m
+      LEFT JOIN celda s ON s.id = m.celda_id
+      LEFT JOIN cuenta_usuario ua ON ua.id = m.registrado_por
+      LEFT JOIN vehiculo v ON v.id = m.vehiculo_id
+      LEFT JOIN residente r ON r.id = v.residente_id
+      WHERE (${plate} = '' OR m.placa LIKE ${'%' + plate + '%'})
+        AND (${q.from || null}::date IS NULL OR m.registrado_en >= ${q.from || null}::date)
+        AND (${q.to || null}::date IS NULL OR m.registrado_en < ${q.to || null}::date + 1)
+        AND (${q.authorized ?? null}::boolean IS NULL OR m.autorizado = ${q.authorized ?? null}::boolean)
+      ORDER BY m.registrado_en DESC, m.id DESC
       LIMIT ${limit}`;
   });
 }

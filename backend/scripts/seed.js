@@ -35,7 +35,7 @@ const RESIDENTS = [
 ];
 
 async function main() {
-  const [{ count }] = await sql`SELECT count(*)::int AS count FROM user_account`;
+  const [{ count }] = await sql`SELECT count(*)::int AS count FROM cuenta_usuario`;
   if (count > 0 && !process.argv.includes('--force')) {
     console.log('La base ya tiene datos. Use "npm run db:reset" para reiniciarla con datos de demostración.');
     return;
@@ -52,22 +52,22 @@ async function main() {
       code: `D${String(i + 1).padStart(2, '0')}`,
       is_disabled_spot: i < 2,
     }));
-    await tx`INSERT INTO parking_spot ${tx(spots)}`;
+    await tx`INSERT INTO celda ${tx(spots)}`;
 
     for (const [name, doc, block, number, brand, model, color, plate, type, debt, score, disability] of RESIDENTS) {
-      const [h] = await tx`INSERT INTO house (block, number) VALUES ('', ${number})
-                           ON CONFLICT (block, number) DO UPDATE SET number = EXCLUDED.number RETURNING id`;
+      const [h] = await tx`INSERT INTO vivienda (bloque, numero) VALUES ('', ${number})
+                           ON CONFLICT (bloque, numero) DO UPDATE SET numero = EXCLUDED.numero RETURNING id`;
       const [r] = await tx`
-        INSERT INTO resident (house_id, full_name, document_number, phone, email, debt, admin_score, has_disability, created_at)
+        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, correo, deuda, puntaje_administrativo, tiene_discapacidad, creado_en)
         VALUES (${h.id}, ${name}, ${doc}, ${'3' + doc.slice(-9).padStart(9, '0')},
                 ${name.split(' ')[0].toLowerCase() + '@correo.com'}, ${debt}, ${score}, ${disability}, ${createdAt})
         RETURNING id`;
       if (plate) {
-        await tx`INSERT INTO vehicle (resident_id, plate, type, brand, model, color)
+        await tx`INSERT INTO vehiculo (residente_id, placa, tipo, marca, modelo, color)
                  VALUES (${r.id}, ${plate}, ${type}, ${brand}, ${model}, ${color})`;
       }
       const username = 'casa' + number;
-      await tx`INSERT INTO user_account (username, full_name, password_hash, role, resident_id)
+      await tx`INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol, residente_id)
                VALUES (${username}, ${name}, ${residentPw}, 'residente', ${r.id})`;
     }
 
@@ -81,24 +81,24 @@ async function main() {
       const number = String(n);
       if (usedHouses.has(number)) continue;
       const name = `${first[i % first.length]} ${last[(i * 7) % last.length]} ${last[(i * 3 + 1) % last.length]}`;
-      const [h] = await tx`INSERT INTO house (block, number) VALUES ('', ${number})
-                           ON CONFLICT (block, number) DO UPDATE SET number = EXCLUDED.number RETURNING id`;
+      const [h] = await tx`INSERT INTO vivienda (bloque, numero) VALUES ('', ${number})
+                           ON CONFLICT (bloque, numero) DO UPDATE SET numero = EXCLUDED.numero RETURNING id`;
       const doc = String(1100000000 + i * 7919);
       const [r] = await tx`
-        INSERT INTO resident (house_id, full_name, document_number, phone, debt, admin_score, created_at)
+        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, deuda, puntaje_administrativo, creado_en)
         VALUES (${h.id}, ${name}, ${doc}, ${'31' + String(20000000 + i * 131).padStart(8, '0')},
                 ${i % 8 === 0 ? 85000 : 0}, ${i % 13 === 0 ? 1 : 0}, ${createdAt}) RETURNING id`;
       if (i % 5 !== 4) {
         const plate = 'G' + letters[i % 20] + letters[Math.floor(i / 20) % 20] + String(100 + i);
-        await tx`INSERT INTO vehicle (resident_id, plate, type) VALUES (${r.id}, ${plate}, ${i % 6 === 0 ? 'moto' : 'carro'})`;
+        await tx`INSERT INTO vehiculo (residente_id, placa, tipo) VALUES (${r.id}, ${plate}, ${i % 6 === 0 ? 'moto' : 'carro'})`;
       }
-      await tx`INSERT INTO user_account (username, full_name, password_hash, role, resident_id)
+      await tx`INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol, residente_id)
                VALUES (${'casa' + number}, ${name}, ${residentPw}, 'residente', ${r.id})`;
       i++;
     }
 
     const adminPw = await hashPassword('admin123');
-    await tx`INSERT INTO user_account (username, full_name, password_hash, role)
+    await tx`INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol)
              VALUES ('mpinilla', 'Miguel Ángel Pinilla Báez', ${adminPw}, 'admin'),
                     ('acardona', 'Ariadna Cardona Martínez', ${adminPw}, 'admin'),
                     ('jmontoya', 'Julián Mauricio Montoya Rodríguez', ${adminPw}, 'admin'),
@@ -112,42 +112,42 @@ async function main() {
     const curEnd = addMonths(curStart, 4);
     const nextEnd = addMonths(curEnd, 4);
 
-    const [prev] = await tx`INSERT INTO cycle (name, start_date, end_date, draw_date, status)
+    const [prev] = await tx`INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo, estado)
       VALUES (${'Ciclo ' + isoDate(prevStart).slice(0, 7)}, ${isoDate(prevStart)}, ${isoDate(prevEnd)}, ${isoDate(addMonths(prevStart, 0))}, 'planeado') RETURNING id`;
     // Tres residentes usaron el parqueadero en el ciclo anterior
-    const prevSpots = await tx`SELECT id FROM parking_spot WHERE NOT is_disabled_spot ORDER BY code LIMIT 3`;
+    const prevSpots = await tx`SELECT id FROM celda WHERE NOT para_discapacidad ORDER BY codigo LIMIT 3`;
     const prevResidents = await tx`
-      SELECT r.id AS rid, v.id AS vid FROM resident r JOIN vehicle v ON v.resident_id = r.id
-      WHERE r.document_number IN ('1034567890','80234567','1078901234') ORDER BY r.id`;
+      SELECT r.id AS rid, v.id AS vid FROM residente r JOIN vehiculo v ON v.residente_id = r.id
+      WHERE r.numero_documento IN ('1034567890','80234567','1078901234') ORDER BY r.id`;
     for (let i = 0; i < prevResidents.length; i++) {
-      await tx`INSERT INTO parking_assignment (cycle_id, resident_id, vehicle_id, parking_spot_id, method, status, released_at)
+      await tx`INSERT INTO asignacion (ciclo_id, residente_id, vehiculo_id, celda_id, metodo, estado, liberado_en)
                VALUES (${prev.id}, ${prevResidents[i].rid}, ${prevResidents[i].vid}, ${prevSpots[i].id}, 'sorteo', 'finalizada', ${prevEnd})`;
     }
-    await tx`UPDATE cycle SET status = 'cerrado' WHERE id = ${prev.id}`;
+    await tx`UPDATE ciclo SET estado = 'cerrado' WHERE id = ${prev.id}`;
 
-    const [cur] = await tx`INSERT INTO cycle (name, start_date, end_date, draw_date)
+    const [cur] = await tx`INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo)
       VALUES (${'Ciclo ' + isoDate(curStart).slice(0, 7)}, ${isoDate(curStart)}, ${isoDate(curEnd)}, ${isoDate(curStart)}) RETURNING id`;
     await confirmDraw(tx, cur.id, { mode: 'prioridad' });
-    await tx`UPDATE cycle SET status = 'activo' WHERE id = ${cur.id}`;
+    await tx`UPDATE ciclo SET estado = 'activo' WHERE id = ${cur.id}`;
 
     // Próximo ciclo planeado (para mostrar "próximo sorteo")
-    await tx`INSERT INTO cycle (name, start_date, end_date, draw_date)
+    await tx`INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo)
       VALUES (${'Ciclo ' + isoDate(curEnd).slice(0, 7)}, ${isoDate(curEnd)}, ${isoDate(nextEnd)}, ${isoDate(addMonths(curEnd, 0))})`;
-    await tx`UPDATE cycle SET draw_date = (start_date - 7) WHERE status = 'planeado'`;
+    await tx`UPDATE ciclo SET fecha_sorteo = (fecha_inicio - 7) WHERE estado = 'planeado'`;
 
     // Algunos movimientos de ejemplo: los asignados que están dentro del conjunto
     const inside = await tx`
-      SELECT pa.id, pa.parking_spot_id, v.id AS vid, v.plate FROM parking_assignment pa
-      JOIN vehicle v ON v.id = pa.vehicle_id WHERE pa.cycle_id = ${cur.id} AND pa.status = 'vigente' LIMIT 6`;
-    const guard = (await tx`SELECT id FROM user_account WHERE username = 'guarda'`)[0].id;
+      SELECT pa.id, pa.celda_id, v.id AS vid, v.placa FROM asignacion pa
+      JOIN vehiculo v ON v.id = pa.vehiculo_id WHERE pa.ciclo_id = ${cur.id} AND pa.estado = 'vigente' LIMIT 6`;
+    const guard = (await tx`SELECT id FROM cuenta_usuario WHERE usuario = 'guarda'`)[0].id;
     for (const m of inside) {
-      await tx`INSERT INTO vehicle_movement (plate, vehicle_id, parking_spot_id, assignment_id, type, authorized, recorded_by, recorded_at)
+      await tx`INSERT INTO movimiento_vehiculo (placa, vehiculo_id, celda_id, asignacion_id, tipo, autorizado, registrado_por, registrado_en)
                VALUES (${m.plate}, ${m.vid}, ${m.parking_spot_id}, ${m.id}, 'entrada', TRUE, ${guard}, now() - interval '3 hours')`;
-      await tx`UPDATE parking_spot SET is_occupied = TRUE WHERE id = ${m.parking_spot_id}`;
+      await tx`UPDATE celda SET ocupada = TRUE WHERE id = ${m.parking_spot_id}`;
     }
   });
 
-  const [{ n }] = await sql`SELECT count(*)::int AS n FROM resident`;
+  const [{ n }] = await sql`SELECT count(*)::int AS n FROM residente`;
   console.log(`Datos de demostración creados: ${n} residentes (casas 1 a ${TOTAL_HOUSES}), 50 celdas, 3 ciclos.`);
   console.log('Usuarios de prueba:');
   console.log('  Administradores: mpinilla, acardona, jmontoya, admin   clave admin123');

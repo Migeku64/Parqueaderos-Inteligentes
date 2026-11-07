@@ -34,6 +34,12 @@ Roles: **Administrador**, **Guarda de seguridad** y **Residente** (Tabla 1 del d
 3. Abra http://localhost:3000/health en el navegador: debe responder `{"status":"ok"...}`.
 4. En pgAdmin: clic derecho en *Databases* → *Refresh* y verá la base `parqueadero` con sus tablas.
 
+> **Tablas en español.** Las tablas y columnas de la base de datos están en español (`vivienda`, `residente`,
+> `vehiculo`, `celda`, `ciclo`, `asignacion`, `cuenta_usuario`, `movimiento_vehiculo`, `notificacion`,
+> `auditoria`, `respaldo`). Si ya tenía la base creada con la versión anterior (tablas en inglés), ejecute
+> `npm run db:migrate` dentro de `backend/` (o simplemente **`INICIAR.bat`** / el despliegue en Render, que lo hacen
+> solos): las tablas se renombran **sin perder datos**.
+
 **Forma manual:** copie `backend/.env.example` como `backend/.env`, ponga su clave en `DATABASE_URL` y ejecute
 `npm install`, `npm run db:reset` y `npm start` dentro de `backend/`.
 
@@ -206,8 +212,11 @@ En Windows (PowerShell): `$env:DATABASE_URL="postgres://..."; npm test`.
 
 ```
 backend/
-  db/schema.sql            tablas (house, resident, vehicle, parking_spot, cycle, parking_assignment,
-                           user_account, vehicle_movement, notification, audit_log, backup_record)
+  db/schema.sql            tablas (vivienda, residente, vehiculo, celda, ciclo, asignacion, cuenta_usuario,
+                           movimiento_vehiculo, notificacion, auditoria, respaldo)
+  db/migrar_a_espanol.sql  convierte una base creada con la versión anterior (tablas en inglés)
+                           a los nombres en español sin perder datos (lo ejecuta migrate.js)
+  src/naming.js            equivalencia entre columnas de la base y campos de la API
   src/routes/              endpoints REST por módulo
   src/services/draw.js     sorteo + IPA
   src/ws.js                WebSocket de tiempo real

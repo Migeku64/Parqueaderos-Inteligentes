@@ -16,6 +16,14 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":3000 .*LISTENING"') d
 )
 timeout /t 1 /nobreak >nul
 
+rem Actualiza las tablas si hace falta (por ejemplo, de nombres en ingles a espanol) sin borrar datos
+node scripts/migrate.js
+if errorlevel 1 (
+  echo No se pudo actualizar la base de datos. Revise el mensaje anterior.
+  pause
+  exit /b 1
+)
+
 echo Iniciando la API en http://localhost:3000  (cierre esta ventana para apagarla)
 echo.
 node src/server.js

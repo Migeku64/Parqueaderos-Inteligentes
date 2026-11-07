@@ -5,14 +5,14 @@ import { ADMIN, hashPassword, validatePassword, randomPassword } from '../auth.j
 import { audit } from '../events.js';
 
 const ROLES = ['admin', 'guarda', 'residente'];
-const cols = sql`u.id, u.username, u.full_name, u.role, u.resident_id, u.is_active, u.is_blocked,
-                 u.failed_attempts, u.must_change_password, u.last_login_at, u.created_at`;
+const cols = sql`u.id, u.usuario, u.nombre_completo, u.rol, u.residente_id, u.activo, u.bloqueado,
+                 u.intentos_fallidos, u.debe_cambiar_contrasena, u.ultimo_ingreso_en, u.creado_en`;
 
 export default function userRoutes(r) {
   r.get('/users', ADMIN, async () => {
-    return sql`SELECT ${cols}, r.full_name AS resident_name
-               FROM user_account u LEFT JOIN resident r ON r.id = u.resident_id
-               ORDER BY u.role, u.username`;
+    return sql`SELECT ${cols}, r.nombre_completo AS resident_name
+               FROM cuenta_usuario u LEFT JOIN residente r ON r.id = u.residente_id
+               ORDER BY u.rol, u.usuario`;
   });
 
   r.post('/users', ADMIN, async (ctx) => {
@@ -23,16 +23,16 @@ export default function userRoutes(r) {
     if (b.role === 'residente' && !b.resident_id) throw badRequest('Un usuario residente debe estar asociado a un residente');
     let fullName = b.full_name || '';
     if (b.resident_id) {
-      const [res] = await sql`SELECT full_name FROM resident WHERE id = ${b.resident_id}`;
+      const [res] = await sql`SELECT nombre_completo FROM residente WHERE id = ${b.resident_id}`;
       if (!res) throw badRequest('Residente no encontrado');
       fullName = fullName || res.full_name;
     }
     const [u] = await sql`
-      INSERT INTO user_account (username, full_name, password_hash, role, resident_id, must_change_password)
+      INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol, residente_id, debe_cambiar_contrasena)
       VALUES (${String(b.username).trim().toLowerCase()}, ${fullName}, ${await hashPassword(b.password)},
               ${b.role}, ${b.resident_id || null}, ${b.must_change_password !== false})
-      RETURNING id, username, full_name, role, resident_id, is_active, is_blocked`;
-    await audit(null, ctx.user.id, 'crear_usuario', 'user_account', u.id, { username: u.username, role: u.role });
+      RETURNING id, usuario, nombre_completo, rol, residente_id, activo, bloqueado`;
+    await audit(null, ctx.user.id, 'crear_usuario', 'cuenta_usuario', u.id, { username: u.username, role: u.role });
     ctx.status = 201;
     return u;
   });
@@ -45,32 +45,32 @@ export default function userRoutes(r) {
       throw badRequest('No puede desactivarse ni quitarse el rol de administrador a sí mismo');
     }
     const [u] = await sql`
-      UPDATE user_account SET
-        full_name = COALESCE(${b.full_name ?? null}, full_name),
-        role = COALESCE(${b.role ?? null}, role),
-        is_active = COALESCE(${b.is_active ?? null}, is_active)
+      UPDATE cuenta_usuario SET
+        nombre_completo = COALESCE(${b.full_name ?? null}, nombre_completo),
+        rol = COALESCE(${b.role ?? null}, rol),
+        activo = COALESCE(${b.is_active ?? null}, activo)
       WHERE id = ${id}
-      RETURNING id, username, full_name, role, resident_id, is_active, is_blocked`;
+      RETURNING id, usuario, nombre_completo, rol, residente_id, activo, bloqueado`;
     if (!u) throw notFound('Usuario no encontrado');
-    await audit(null, ctx.user.id, 'editar_usuario', 'user_account', id, b);
+    await audit(null, ctx.user.id, 'editar_usuario', 'cuenta_usuario', id, b);
     return u;
   });
 
   r.post('/users/:id/block', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
     if (id === ctx.user.id) throw badRequest('No puede bloquearse a sí mismo');
-    const [u] = await sql`UPDATE user_account SET is_blocked = TRUE WHERE id = ${id} RETURNING id, username, is_blocked`;
+    const [u] = await sql`UPDATE cuenta_usuario SET bloqueado = TRUE WHERE id = ${id} RETURNING id, usuario, bloqueado`;
     if (!u) throw notFound('Usuario no encontrado');
-    await audit(null, ctx.user.id, 'usuario_bloqueado', 'user_account', id, { motivo: ctx.body.reason || 'manual' });
+    await audit(null, ctx.user.id, 'usuario_bloqueado', 'cuenta_usuario', id, { motivo: ctx.body.reason || 'manual' });
     return u;
   });
 
   r.post('/users/:id/unblock', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
-    const [u] = await sql`UPDATE user_account SET is_blocked = FALSE, failed_attempts = 0 WHERE id = ${id}
-                          RETURNING id, username, is_blocked`;
+    const [u] = await sql`UPDATE cuenta_usuario SET bloqueado = FALSE, intentos_fallidos = 0 WHERE id = ${id}
+                          RETURNING id, usuario, bloqueado`;
     if (!u) throw notFound('Usuario no encontrado');
-    await audit(null, ctx.user.id, 'usuario_desbloqueado', 'user_account', id);
+    await audit(null, ctx.user.id, 'usuario_desbloqueado', 'cuenta_usuario', id);
     return u;
   });
 
@@ -79,11 +79,11 @@ export default function userRoutes(r) {
     const temp = ctx.body.password || randomPassword();
     validatePassword(temp);
     const [u] = await sql`
-      UPDATE user_account SET password_hash = ${await hashPassword(temp)}, must_change_password = TRUE,
-             failed_attempts = 0, is_blocked = FALSE
-      WHERE id = ${id} RETURNING id, username`;
+      UPDATE cuenta_usuario SET hash_contrasena = ${await hashPassword(temp)}, debe_cambiar_contrasena = TRUE,
+             intentos_fallidos = 0, bloqueado = FALSE
+      WHERE id = ${id} RETURNING id, usuario`;
     if (!u) throw notFound('Usuario no encontrado');
-    await audit(null, ctx.user.id, 'restablecer_contrasena', 'user_account', id);
+    await audit(null, ctx.user.id, 'restablecer_contrasena', 'cuenta_usuario', id);
     return { ...u, temporary_password: temp };
   });
 }

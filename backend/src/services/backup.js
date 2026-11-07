@@ -8,16 +8,16 @@ import { config } from '../config.js';
 import { notify } from '../events.js';
 
 export const BACKUP_TABLES = [
-  'house',
-  'resident',
-  'vehicle',
-  'parking_spot',
-  'cycle',
-  'parking_assignment',
-  'user_account',
-  'vehicle_movement',
-  'notification',
-  'audit_log',
+  'vivienda',
+  'residente',
+  'vehiculo',
+  'celda',
+  'ciclo',
+  'asignacion',
+  'cuenta_usuario',
+  'movimiento_vehiculo',
+  'notificacion',
+  'auditoria',
 ];
 
 export async function runBackup(trigger = 'automatico') {
@@ -25,22 +25,24 @@ export async function runBackup(trigger = 'automatico') {
   const fileName = `respaldo-${stamp}.json`;
   try {
     await mkdir(config.backupDir, { recursive: true });
-    const data = { generated_at: new Date().toISOString(), version: 1, tables: {} };
+    const data = { generated_at: new Date().toISOString(), version: 2, tables: {} };
     for (const t of BACKUP_TABLES) {
-      data.tables[t] = await sql`SELECT * FROM ${sql(t)} ORDER BY id`;
+      // row_to_json conserva los nombres reales de las columnas (en español)
+      const rows = await sql`SELECT row_to_json(x) AS fila FROM ${sql(t)} x ORDER BY x.id`;
+      data.tables[t] = rows.map((r) => r.fila);
     }
     const file = path.join(config.backupDir, fileName);
     await writeFile(file, JSON.stringify(data));
     const { size } = await stat(file);
     const [rec] = await sql`
-      INSERT INTO backup_record (file_name, size_bytes, status, trigger)
+      INSERT INTO respaldo (nombre_archivo, tamano_bytes, estado, disparador)
       VALUES (${fileName}, ${size}, 'ok', ${trigger}) RETURNING *`;
     await pruneOldBackups();
     return rec;
   } catch (err) {
     console.error('[backup] error', err);
     const [rec] = await sql`
-      INSERT INTO backup_record (file_name, status, error, trigger)
+      INSERT INTO respaldo (nombre_archivo, estado, error, disparador)
       VALUES (${fileName}, 'error', ${String(err.message || err)}, ${trigger}) RETURNING *`;
     await notify({ role: 'admin', title: 'Falló el respaldo automático', body: String(err.message || err), kind: 'alerta' }).catch(() => {});
     return rec;

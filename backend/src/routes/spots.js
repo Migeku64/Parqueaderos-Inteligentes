@@ -7,23 +7,23 @@ import { broadcast } from '../ws.js';
 
 export async function listSpots(db = sql) {
   return db`
-    SELECT s.id, s.code, s.is_disabled_spot, s.is_active, s.is_occupied, s.notes,
-           a.id AS assignment_id, a.resident_id, r.full_name AS resident_name,
-           CASE WHEN h.block = '' THEN h.number ELSE h.block || '-' || h.number END AS house,
-           v.plate,
-           CASE WHEN NOT s.is_active THEN 'inactiva'
-                WHEN s.is_occupied THEN 'ocupada'
+    SELECT s.id, s.codigo, s.para_discapacidad, s.activo, s.ocupada, s.observaciones,
+           a.id AS asignacion_id, a.residente_id, r.nombre_completo AS resident_name,
+           CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house,
+           v.placa,
+           CASE WHEN NOT s.activo THEN 'inactiva'
+                WHEN s.ocupada THEN 'ocupada'
                 WHEN a.id IS NOT NULL THEN 'asignada'
                 ELSE 'libre' END AS state
-    FROM parking_spot s
+    FROM celda s
     LEFT JOIN LATERAL (
-      SELECT pa.* FROM parking_assignment pa JOIN cycle c ON c.id = pa.cycle_id
-      WHERE pa.parking_spot_id = s.id AND pa.status = 'vigente' AND c.status = 'activo' LIMIT 1
+      SELECT pa.* FROM asignacion pa JOIN ciclo c ON c.id = pa.ciclo_id
+      WHERE pa.celda_id = s.id AND pa.estado = 'vigente' AND c.estado = 'activo' LIMIT 1
     ) a ON TRUE
-    LEFT JOIN resident r ON r.id = a.resident_id
-    LEFT JOIN house h ON h.id = r.house_id
-    LEFT JOIN vehicle v ON v.id = a.vehicle_id
-    ORDER BY length(s.code), s.code`;
+    LEFT JOIN residente r ON r.id = a.residente_id
+    LEFT JOIN vivienda h ON h.id = r.vivienda_id
+    LEFT JOIN vehiculo v ON v.id = a.vehiculo_id
+    ORDER BY length(s.codigo), s.codigo`;
 }
 
 export function spotsChanged() {
@@ -50,20 +50,20 @@ export default function spotRoutes(r) {
 
   r.get('/spots/summary', ANY, async () => {
     const [s] = await sql`
-      SELECT count(*) FILTER (WHERE is_active)::int AS total,
-             count(*) FILTER (WHERE is_active AND is_occupied)::int AS occupied,
-             count(*) FILTER (WHERE is_active AND NOT is_occupied)::int AS free
-      FROM parking_spot`;
+      SELECT count(*) FILTER (WHERE activo)::int AS total,
+             count(*) FILTER (WHERE activo AND ocupada)::int AS occupied,
+             count(*) FILTER (WHERE activo AND NOT ocupada)::int AS free
+      FROM celda`;
     return s;
   });
 
   r.post('/spots', ADMIN, async (ctx) => {
     required(ctx.body, ['code']);
     const [s] = await sql`
-      INSERT INTO parking_spot (code, is_disabled_spot, notes)
+      INSERT INTO celda (codigo, para_discapacidad, observaciones)
       VALUES (${String(ctx.body.code).trim().toUpperCase()}, ${!!ctx.body.is_disabled_spot}, ${ctx.body.notes || null})
       RETURNING *`;
-    await audit(null, ctx.user.id, 'crear_celda', 'parking_spot', s.id, { code: s.code });
+    await audit(null, ctx.user.id, 'crear_celda', 'celda', s.id, { code: s.code });
     spotsChanged();
     ctx.status = 201;
     return s;
@@ -81,8 +81,8 @@ export default function spotRoutes(r) {
     const rows = [];
     for (let i = from; i <= to; i++) rows.push({ code: `${prefix}${String(i).padStart(width, '0')}` });
     const created = await sql`
-      INSERT INTO parking_spot ${sql(rows)} ON CONFLICT (code) DO NOTHING RETURNING id`;
-    await audit(null, ctx.user.id, 'crear_celdas', 'parking_spot', null, { prefix, from, to, creadas: created.length });
+      INSERT INTO celda ${sql(rows)} ON CONFLICT (codigo) DO NOTHING RETURNING id`;
+    await audit(null, ctx.user.id, 'crear_celdas', 'celda', null, { prefix, from, to, creadas: created.length });
     spotsChanged();
     ctx.status = 201;
     return { created: created.length };
@@ -92,15 +92,15 @@ export default function spotRoutes(r) {
     const id = intParam(ctx.params.id);
     const b = ctx.body;
     const [s] = await sql`
-      UPDATE parking_spot SET
-        code = COALESCE(${b.code ? String(b.code).trim().toUpperCase() : null}, code),
-        is_disabled_spot = COALESCE(${b.is_disabled_spot ?? null}, is_disabled_spot),
-        is_active = COALESCE(${b.is_active ?? null}, is_active),
-        is_occupied = COALESCE(${b.is_occupied ?? null}, is_occupied),
-        notes = COALESCE(${b.notes ?? null}, notes)
+      UPDATE celda SET
+        codigo = COALESCE(${b.code ? String(b.code).trim().toUpperCase() : null}, codigo),
+        para_discapacidad = COALESCE(${b.is_disabled_spot ?? null}, para_discapacidad),
+        activo = COALESCE(${b.is_active ?? null}, activo),
+        ocupada = COALESCE(${b.is_occupied ?? null}, ocupada),
+        observaciones = COALESCE(${b.notes ?? null}, observaciones)
       WHERE id = ${id} RETURNING *`;
     if (!s) throw notFound('Celda no encontrada');
-    await audit(null, ctx.user.id, 'editar_celda', 'parking_spot', id, b);
+    await audit(null, ctx.user.id, 'editar_celda', 'celda', id, b);
     spotsChanged();
     return s;
   });

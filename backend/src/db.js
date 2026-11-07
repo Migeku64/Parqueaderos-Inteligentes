@@ -1,10 +1,13 @@
 import postgres from 'postgres';
 import { config } from './config.js';
+import { toApi, toDb } from './naming.js';
 
 export const sql = postgres(config.databaseUrl, {
   max: 10,
   ssl: config.databaseSsl ? 'require' : false,
   onnotice: () => {},
+  // Tablas y columnas en español; la API conserva sus nombres de campo (ver naming.js)
+  transform: { column: { from: toApi, to: toDb } },
   // Devuelve DATE como texto 'YYYY-MM-DD' (evita corrimientos de zona horaria)
   types: {
     date: {

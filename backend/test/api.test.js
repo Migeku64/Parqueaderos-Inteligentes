@@ -169,7 +169,7 @@ test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async 
   const cyc = await api('GET', '/cycles');
   const active = cyc.data.find((c) => c.status === 'activo');
   const detail = await api('GET', `/cycles/${active.id}`);
-  const parked = await sql`SELECT DISTINCT plate FROM vehicle_movement`;
+  const parked = await sql`SELECT DISTINCT placa FROM movimiento_vehiculo`;
   const free = detail.data.assignment_list.find((a) => !parked.some((p) => p.plate === a.plate));
   assert.ok(free, 'hay un asignado fuera del conjunto');
 
@@ -186,7 +186,7 @@ test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async 
 
   const s1 = await api('POST', '/movements', { plate: free.plate, type: 'salida' }, 'guarda');
   assert.equal(s1.status, 201);
-  const [spot] = await sql`SELECT is_occupied FROM parking_spot WHERE code = ${free.spot_code}`;
+  const [spot] = await sql`SELECT ocupada FROM celda WHERE codigo = ${free.spot_code}`;
   assert.equal(spot.is_occupied, false);
 
   const bad = await api('POST', '/movements', { plate: 'ZZZ999', type: 'entrada' }, 'guarda');
@@ -276,7 +276,7 @@ test('reportes JSON y CSV, auditoría, dashboard y respaldo', async () => {
   assert.equal(b.data.status, 'ok');
   const dl = await fetch(`${base}/backups/${b.data.id}/download`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
   const json = await dl.json();
-  assert.ok(json.tables.resident.length >= 300);
+  assert.ok(json.tables.residente.length >= 300);
 });
 
 test('ciclos: validación de fechas, cierre y activación', async () => {

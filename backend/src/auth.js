@@ -66,8 +66,8 @@ export async function userFromToken(token) {
   const payload = verifyToken(token);
   if (!payload) return null;
   const [user] = await sql`
-    SELECT id, username, full_name, role, resident_id, is_active, is_blocked, must_change_password
-    FROM user_account WHERE id = ${payload.sub}`;
+    SELECT id, usuario, nombre_completo, rol, residente_id, activo, bloqueado, debe_cambiar_contrasena
+    FROM cuenta_usuario WHERE id = ${payload.sub}`;
   if (!user || !user.is_active || user.is_blocked) return null;
   return user;
 }

@@ -16,15 +16,15 @@ export default function miscRoutes(r) {
   r.get('/me/summary', RESIDENT, async (ctx) => {
     const res = await getResident(ctx.user.resident_id);
     if (!res) throw notFound('Residente no encontrado');
-    const [active] = await sql`SELECT * FROM cycle WHERE status = 'activo'`;
-    const [next] = await sql`SELECT * FROM cycle WHERE status = 'planeado' ORDER BY start_date LIMIT 1`;
+    const [active] = await sql`SELECT * FROM ciclo WHERE estado = 'activo'`;
+    const [next] = await sql`SELECT * FROM ciclo WHERE estado = 'planeado' ORDER BY fecha_inicio LIMIT 1`;
     const history = await sql`
-      SELECT c.name AS cycle_name, c.start_date, c.end_date, s.code AS spot_code, pa.status, pa.method, pa.ipa_score
-      FROM parking_assignment pa JOIN cycle c ON c.id = pa.cycle_id JOIN parking_spot s ON s.id = pa.parking_spot_id
-      WHERE pa.resident_id = ${res.id} ORDER BY c.start_date DESC LIMIT 20`;
+      SELECT c.nombre AS cycle_name, c.fecha_inicio, c.fecha_fin, s.codigo AS spot_code, pa.estado, pa.metodo, pa.puntaje_ipa
+      FROM asignacion pa JOIN ciclo c ON c.id = pa.ciclo_id JOIN celda s ON s.id = pa.celda_id
+      WHERE pa.residente_id = ${res.id} ORDER BY c.fecha_inicio DESC LIMIT 20`;
     const [nextAssignment] = next
-      ? await sql`SELECT s.code AS spot_code FROM parking_assignment pa JOIN parking_spot s ON s.id = pa.parking_spot_id
-                  WHERE pa.cycle_id = ${next.id} AND pa.resident_id = ${res.id} AND pa.status = 'vigente'`
+      ? await sql`SELECT s.codigo AS spot_code FROM asignacion pa JOIN celda s ON s.id = pa.celda_id
+                  WHERE pa.ciclo_id = ${next.id} AND pa.residente_id = ${res.id} AND pa.estado = 'vigente'`
       : [];
 
     // Prioridad estimada para el próximo sorteo
@@ -65,21 +65,21 @@ export default function miscRoutes(r) {
   // ---------- Notificaciones ----------
   r.get('/notifications', ANY, async (ctx) => {
     const items = await sql`
-      SELECT id, title, body, kind, created_at, read_at FROM notification
-      WHERE user_account_id = ${ctx.user.id} ORDER BY created_at DESC, id DESC LIMIT 100`;
+      SELECT id, titulo, cuerpo, categoria, creado_en, leido_en FROM notificacion
+      WHERE cuenta_usuario_id = ${ctx.user.id} ORDER BY creado_en DESC, id DESC LIMIT 100`;
     const [{ unread }] = await sql`
-      SELECT count(*)::int AS unread FROM notification WHERE user_account_id = ${ctx.user.id} AND read_at IS NULL`;
+      SELECT count(*)::int AS unread FROM notificacion WHERE cuenta_usuario_id = ${ctx.user.id} AND leido_en IS NULL`;
     return { unread, items };
   });
 
   r.post('/notifications/:id/read', ANY, async (ctx) => {
-    await sql`UPDATE notification SET read_at = now()
-              WHERE id = ${intParam(ctx.params.id)} AND user_account_id = ${ctx.user.id} AND read_at IS NULL`;
+    await sql`UPDATE notificacion SET leido_en = now()
+              WHERE id = ${intParam(ctx.params.id)} AND cuenta_usuario_id = ${ctx.user.id} AND leido_en IS NULL`;
     return { ok: true };
   });
 
   r.post('/notifications/read-all', ANY, async (ctx) => {
-    await sql`UPDATE notification SET read_at = now() WHERE user_account_id = ${ctx.user.id} AND read_at IS NULL`;
+    await sql`UPDATE notificacion SET leido_en = now() WHERE cuenta_usuario_id = ${ctx.user.id} AND leido_en IS NULL`;
     return { ok: true };
   });
 
@@ -88,26 +88,26 @@ export default function miscRoutes(r) {
     const q = ctx.query;
     const limit = Math.min(Number(q.limit) || 200, 1000);
     return sql`
-      SELECT a.id, a.action, a.entity_name, a.entity_id, a.performed_at, a.details, u.username
-      FROM audit_log a LEFT JOIN user_account u ON u.id = a.user_account_id
-      WHERE (${q.action || null}::text IS NULL OR a.action = ${q.action || null})
-        AND (${q.from || null}::date IS NULL OR a.performed_at >= ${q.from || null}::date)
-        AND (${q.to || null}::date IS NULL OR a.performed_at < ${q.to || null}::date + 1)
-      ORDER BY a.performed_at DESC, a.id DESC LIMIT ${limit}`;
+      SELECT a.id, a.accion, a.entidad, a.entidad_id, a.realizado_en, a.detalles, u.usuario
+      FROM auditoria a LEFT JOIN cuenta_usuario u ON u.id = a.cuenta_usuario_id
+      WHERE (${q.action || null}::text IS NULL OR a.accion = ${q.action || null})
+        AND (${q.from || null}::date IS NULL OR a.realizado_en >= ${q.from || null}::date)
+        AND (${q.to || null}::date IS NULL OR a.realizado_en < ${q.to || null}::date + 1)
+      ORDER BY a.realizado_en DESC, a.id DESC LIMIT ${limit}`;
   });
 
   // ---------- Respaldos ----------
-  r.get('/backups', ADMIN, async () => sql`SELECT * FROM backup_record ORDER BY created_at DESC LIMIT 100`);
+  r.get('/backups', ADMIN, async () => sql`SELECT * FROM respaldo ORDER BY creado_en DESC LIMIT 100`);
 
   r.post('/backups', ADMIN, async (ctx) => {
     const rec = await runBackup('manual');
-    await audit(null, ctx.user.id, 'respaldo_manual', 'backup_record', rec.id, { archivo: rec.file_name, estado: rec.status });
+    await audit(null, ctx.user.id, 'respaldo_manual', 'respaldo', rec.id, { archivo: rec.file_name, estado: rec.status });
     ctx.status = 201;
     return rec;
   });
 
   r.get('/backups/:id/download', ADMIN, async (ctx) => {
-    const [rec] = await sql`SELECT * FROM backup_record WHERE id = ${intParam(ctx.params.id)} AND status = 'ok'`;
+    const [rec] = await sql`SELECT * FROM respaldo WHERE id = ${intParam(ctx.params.id)} AND estado = 'ok'`;
     const file = rec && backupPath(rec.file_name);
     if (!file) throw notFound('Respaldo no encontrado');
     try {

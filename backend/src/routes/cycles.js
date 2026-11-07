@@ -18,26 +18,26 @@ function validateDates(start, end) {
 
 const cycleSelect = sql`
   SELECT c.*,
-         (SELECT count(*)::int FROM parking_assignment pa WHERE pa.cycle_id = c.id AND pa.status <> 'cancelada') AS assignments
-  FROM cycle c`;
+         (SELECT count(*)::int FROM asignacion pa WHERE pa.ciclo_id = c.id AND pa.estado <> 'cancelada') AS assignments
+  FROM ciclo c`;
 
 export default function cycleRoutes(r) {
-  r.get('/cycles', STAFF, async () => sql`${cycleSelect} ORDER BY c.start_date DESC`);
+  r.get('/cycles', STAFF, async () => sql`${cycleSelect} ORDER BY c.fecha_inicio DESC`);
 
   r.get('/cycles/:id', STAFF, async (ctx) => {
     const id = intParam(ctx.params.id);
     const [c] = await sql`${cycleSelect} WHERE c.id = ${id}`;
     if (!c) throw notFound('Ciclo no encontrado');
     const assignments = await sql`
-      SELECT pa.id, pa.status, pa.method, pa.ipa_score, pa.assigned_at, pa.released_at, pa.notes,
-             r.id AS resident_id, r.full_name,
-             CASE WHEN h.block = '' THEN h.number ELSE h.block || '-' || h.number END AS house,
-             v.plate, s.id AS parking_spot_id, s.code AS spot_code
-      FROM parking_assignment pa
-      JOIN resident r ON r.id = pa.resident_id JOIN house h ON h.id = r.house_id
-      JOIN vehicle v ON v.id = pa.vehicle_id JOIN parking_spot s ON s.id = pa.parking_spot_id
-      WHERE pa.cycle_id = ${id}
-      ORDER BY length(s.code), s.code`;
+      SELECT pa.id, pa.estado, pa.metodo, pa.puntaje_ipa, pa.asignado_en, pa.liberado_en, pa.observaciones,
+             r.id AS residente_id, r.nombre_completo,
+             CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house,
+             v.placa, s.id AS celda_id, s.codigo AS spot_code
+      FROM asignacion pa
+      JOIN residente r ON r.id = pa.residente_id JOIN vivienda h ON h.id = r.vivienda_id
+      JOIN vehiculo v ON v.id = pa.vehiculo_id JOIN celda s ON s.id = pa.celda_id
+      WHERE pa.ciclo_id = ${id}
+      ORDER BY length(s.codigo), s.codigo`;
     return { ...c, assignment_list: assignments };
   });
 
@@ -47,13 +47,13 @@ export default function cycleRoutes(r) {
     validateDates(b.start_date, b.end_date);
     if (b.draw_date && !isDate(b.draw_date)) throw badRequest('Fecha de sorteo inválida');
     const [overlap] = await sql`
-      SELECT id, name FROM cycle WHERE status <> 'cerrado'
-        AND daterange(start_date, end_date) && daterange(${b.start_date}::date, ${b.end_date}::date)`;
+      SELECT id, nombre FROM ciclo WHERE estado <> 'cerrado'
+        AND daterange(fecha_inicio, fecha_fin) && daterange(${b.start_date}::date, ${b.end_date}::date)`;
     if (overlap) throw conflict(`Las fechas se cruzan con el ciclo "${overlap.name}"`);
     const [c] = await sql`
-      INSERT INTO cycle (name, start_date, end_date, draw_date)
+      INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo)
       VALUES (${b.name}, ${b.start_date}, ${b.end_date}, ${b.draw_date || null}) RETURNING *`;
-    await audit(null, ctx.user.id, 'crear_ciclo', 'cycle', c.id, b);
+    await audit(null, ctx.user.id, 'crear_ciclo', 'ciclo', c.id, b);
     if (c.draw_date) {
       await notify({
         role: 'residente',
@@ -75,10 +75,10 @@ export default function cycleRoutes(r) {
     const end = b.end_date ?? c.end_date;
     validateDates(start, end);
     const [u] = await sql`
-      UPDATE cycle SET name = ${b.name ?? c.name}, start_date = ${start}, end_date = ${end},
-             draw_date = ${b.draw_date !== undefined ? b.draw_date || null : c.draw_date}
+      UPDATE ciclo SET nombre = ${b.name ?? c.name}, fecha_inicio = ${start}, fecha_fin = ${end},
+             fecha_sorteo = ${b.draw_date !== undefined ? b.draw_date || null : c.draw_date}
       WHERE id = ${id} RETURNING *`;
-    await audit(null, ctx.user.id, 'editar_ciclo', 'cycle', id, b);
+    await audit(null, ctx.user.id, 'editar_ciclo', 'ciclo', id, b);
     return u;
   });
 
@@ -86,11 +86,11 @@ export default function cycleRoutes(r) {
     const id = intParam(ctx.params.id);
     const c = await getCycle(id);
     if (c.status !== 'planeado') throw badRequest('Solo se puede activar un ciclo planeado');
-    const [active] = await sql`SELECT id, name FROM cycle WHERE status = 'activo'`;
+    const [active] = await sql`SELECT id, nombre FROM ciclo WHERE estado = 'activo'`;
     if (active) throw conflict(`Primero finalice el ciclo activo "${active.name}"`);
-    const [u] = await sql`UPDATE cycle SET status = 'activo' WHERE id = ${id} RETURNING *`;
-    await audit(null, ctx.user.id, 'activar_ciclo', 'cycle', id);
-    const winners = await sql`SELECT resident_id FROM parking_assignment WHERE cycle_id = ${id} AND status = 'vigente'`;
+    const [u] = await sql`UPDATE ciclo SET estado = 'activo' WHERE id = ${id} RETURNING *`;
+    await audit(null, ctx.user.id, 'activar_ciclo', 'ciclo', id);
+    const winners = await sql`SELECT residente_id FROM asignacion WHERE ciclo_id = ${id} AND estado = 'vigente'`;
     await notify({
       residentIds: winners.map((w) => w.resident_id),
       title: 'Su turno de parqueadero comenzó',
@@ -108,10 +108,10 @@ export default function cycleRoutes(r) {
     if (c.status === 'cerrado') throw badRequest('El ciclo ya está cerrado');
     const result = await sql.begin(async (tx) => {
       const released = await tx`
-        UPDATE parking_assignment SET status = 'finalizada', released_at = now()
-        WHERE cycle_id = ${id} AND status = 'vigente' RETURNING resident_id`;
-      const [u] = await tx`UPDATE cycle SET status = 'cerrado' WHERE id = ${id} RETURNING *`;
-      await audit(tx, ctx.user.id, 'cerrar_ciclo', 'cycle', id, { liberadas: released.length });
+        UPDATE asignacion SET estado = 'finalizada', liberado_en = now()
+        WHERE ciclo_id = ${id} AND estado = 'vigente' RETURNING residente_id`;
+      const [u] = await tx`UPDATE ciclo SET estado = 'cerrado' WHERE id = ${id} RETURNING *`;
+      await audit(tx, ctx.user.id, 'cerrar_ciclo', 'ciclo', id, { liberadas: released.length });
       await notify(
         {
           residentIds: released.map((x) => x.resident_id),
@@ -144,7 +144,7 @@ export default function cycleRoutes(r) {
     const id = intParam(ctx.params.id);
     const result = await sql.begin(async (tx) => {
       const res = await confirmDraw(tx, id, { mode: ctx.body.mode, proposal: ctx.body.proposal });
-      await audit(tx, ctx.user.id, 'sorteo', 'cycle', id, {
+      await audit(tx, ctx.user.id, 'sorteo', 'ciclo', id, {
         modo: res.mode,
         asignados: res.assigned.length,
         lista_espera: res.waitlist.length,
@@ -192,17 +192,17 @@ export default function cycleRoutes(r) {
     const c = await getCycle(Number(b.cycle_id));
     if (c.status === 'cerrado') throw badRequest('El ciclo está cerrado');
     const [veh] = b.vehicle_id
-      ? await sql`SELECT id FROM vehicle WHERE id = ${b.vehicle_id} AND resident_id = ${b.resident_id} AND is_active`
-      : await sql`SELECT id FROM vehicle WHERE resident_id = ${b.resident_id} AND is_active ORDER BY (type = 'moto'), id LIMIT 1`;
+      ? await sql`SELECT id FROM vehiculo WHERE id = ${b.vehicle_id} AND residente_id = ${b.resident_id} AND activo`
+      : await sql`SELECT id FROM vehiculo WHERE residente_id = ${b.resident_id} AND activo ORDER BY (tipo = 'moto'), id LIMIT 1`;
     if (!veh) throw badRequest('El residente no tiene un vehículo activo');
-    const [spot] = await sql`SELECT id, is_active FROM parking_spot WHERE id = ${b.parking_spot_id}`;
+    const [spot] = await sql`SELECT id, activo FROM celda WHERE id = ${b.parking_spot_id}`;
     if (!spot || !spot.is_active) throw badRequest('Celda no disponible');
     const [a] = await sql`
-      INSERT INTO parking_assignment (cycle_id, resident_id, vehicle_id, parking_spot_id, method, notes)
+      INSERT INTO asignacion (ciclo_id, residente_id, vehiculo_id, celda_id, metodo, observaciones)
       VALUES (${c.id}, ${b.resident_id}, ${veh.id}, ${b.parking_spot_id}, 'manual', ${b.notes || null})
       RETURNING *`;
-    await audit(null, ctx.user.id, 'asignacion_manual', 'parking_assignment', a.id, b);
-    const [s] = await sql`SELECT code FROM parking_spot WHERE id = ${a.parking_spot_id}`;
+    await audit(null, ctx.user.id, 'asignacion_manual', 'asignacion', a.id, b);
+    const [s] = await sql`SELECT codigo FROM celda WHERE id = ${a.parking_spot_id}`;
     await notify({
       residentIds: [Number(b.resident_id)],
       title: 'Se le asignó una celda de parqueadero',
@@ -218,11 +218,11 @@ export default function cycleRoutes(r) {
   r.post('/assignments/:id/cancel', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
     const [a] = await sql`
-      UPDATE parking_assignment SET status = 'cancelada', released_at = now(),
-             notes = COALESCE(${ctx.body.reason || null}, notes)
-      WHERE id = ${id} AND status = 'vigente' RETURNING *`;
+      UPDATE asignacion SET estado = 'cancelada', liberado_en = now(),
+             observaciones = COALESCE(${ctx.body.reason || null}, observaciones)
+      WHERE id = ${id} AND estado = 'vigente' RETURNING *`;
     if (!a) throw notFound('Asignación vigente no encontrada');
-    await audit(null, ctx.user.id, 'cancelar_asignacion', 'parking_assignment', id, { motivo: ctx.body.reason });
+    await audit(null, ctx.user.id, 'cancelar_asignacion', 'asignacion', id, { motivo: ctx.body.reason });
     await notify({
       residentIds: [a.resident_id],
       title: 'Su asignación de parqueadero fue cancelada',
@@ -238,19 +238,19 @@ export default function cycleRoutes(r) {
   r.get('/assignments', STAFF, async (ctx) => {
     const q = ctx.query;
     return sql`
-      SELECT pa.id, pa.status, pa.method, pa.ipa_score, pa.assigned_at, pa.released_at,
-             c.id AS cycle_id, c.name AS cycle_name, c.start_date, c.end_date,
-             r.id AS resident_id, r.full_name,
-             CASE WHEN h.block = '' THEN h.number ELSE h.block || '-' || h.number END AS house,
-             v.plate, s.code AS spot_code
-      FROM parking_assignment pa
-      JOIN cycle c ON c.id = pa.cycle_id
-      JOIN resident r ON r.id = pa.resident_id JOIN house h ON h.id = r.house_id
-      JOIN vehicle v ON v.id = pa.vehicle_id JOIN parking_spot s ON s.id = pa.parking_spot_id
+      SELECT pa.id, pa.estado, pa.metodo, pa.puntaje_ipa, pa.asignado_en, pa.liberado_en,
+             c.id AS ciclo_id, c.nombre AS cycle_name, c.fecha_inicio, c.fecha_fin,
+             r.id AS residente_id, r.nombre_completo,
+             CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house,
+             v.placa, s.codigo AS spot_code
+      FROM asignacion pa
+      JOIN ciclo c ON c.id = pa.ciclo_id
+      JOIN residente r ON r.id = pa.residente_id JOIN vivienda h ON h.id = r.vivienda_id
+      JOIN vehiculo v ON v.id = pa.vehiculo_id JOIN celda s ON s.id = pa.celda_id
       WHERE (${q.cycle_id || null}::int IS NULL OR c.id = ${q.cycle_id || null}::int)
         AND (${q.resident_id || null}::int IS NULL OR r.id = ${q.resident_id || null}::int)
-        AND (${q.status || null}::text IS NULL OR pa.status = ${q.status || null})
-      ORDER BY c.start_date DESC, length(s.code), s.code
+        AND (${q.status || null}::text IS NULL OR pa.estado = ${q.status || null})
+      ORDER BY c.fecha_inicio DESC, length(s.codigo), s.codigo
       LIMIT 1000`;
   });
 }

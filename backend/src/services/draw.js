@@ -50,7 +50,7 @@ function monthsBetween(fromDate, toDate) {
 }
 
 export async function getCycle(id, db = sql) {
-  const [cycle] = await db`SELECT * FROM cycle WHERE id = ${id}`;
+  const [cycle] = await db`SELECT * FROM ciclo WHERE id = ${id}`;
   if (!cycle) throw new HttpError(404, 'Ciclo no encontrado');
   return cycle;
 }
@@ -60,27 +60,27 @@ export async function getCycle(id, db = sql) {
  */
 export async function evaluateResidents(cycle, db = sql) {
   const previous = await db`
-    SELECT id, start_date, end_date FROM cycle
-    WHERE id <> ${cycle.id} AND start_date < ${cycle.start_date}
-    ORDER BY start_date DESC LIMIT ${HISTORY_WINDOW}`;
+    SELECT id, fecha_inicio, fecha_fin FROM ciclo
+    WHERE id <> ${cycle.id} AND fecha_inicio < ${cycle.start_date}
+    ORDER BY fecha_inicio DESC LIMIT ${HISTORY_WINDOW}`;
   const previousIds = previous.map((c) => c.id);
   const lastCycleId = previousIds[0] ?? null;
 
   const residents = await db`
-    SELECT r.id, r.full_name, r.status, r.debt, r.admin_score, r.has_disability, r.created_at,
-           h.block, h.number AS house_number,
-           ua.is_blocked,
-           (SELECT json_agg(json_build_object('id', v.id, 'plate', v.plate, 'type', v.type) ORDER BY (v.type = 'moto'), v.id)
-              FROM vehicle v WHERE v.resident_id = r.id AND v.is_active) AS vehicles
-    FROM resident r
-    JOIN house h ON h.id = r.house_id
-    LEFT JOIN user_account ua ON ua.resident_id = r.id
+    SELECT r.id, r.nombre_completo, r.estado, r.deuda, r.puntaje_administrativo, r.tiene_discapacidad, r.creado_en,
+           h.bloque, h.numero AS house_number,
+           ua.bloqueado,
+           (SELECT json_agg(json_build_object('id', v.id, 'plate', v.placa, 'type', v.tipo) ORDER BY (v.tipo = 'moto'), v.id)
+              FROM vehiculo v WHERE v.residente_id = r.id AND v.activo) AS vehicles
+    FROM residente r
+    JOIN vivienda h ON h.id = r.vivienda_id
+    LEFT JOIN cuenta_usuario ua ON ua.residente_id = r.id
     ORDER BY r.id`;
 
   const usage = await db`
-    SELECT pa.resident_id, pa.cycle_id, pa.status, c.end_date, pa.released_at
-    FROM parking_assignment pa JOIN cycle c ON c.id = pa.cycle_id
-    WHERE pa.status IN ('vigente','finalizada')`;
+    SELECT pa.residente_id, pa.ciclo_id, pa.estado, c.fecha_fin, pa.liberado_en
+    FROM asignacion pa JOIN ciclo c ON c.id = pa.ciclo_id
+    WHERE pa.estado IN ('vigente','finalizada')`;
 
   const byResident = new Map();
   for (const u of usage) {
@@ -129,12 +129,12 @@ export async function evaluateResidents(cycle, db = sql) {
 
 export async function availableSpots(cycleId, db = sql) {
   return db`
-    SELECT s.id, s.code, s.is_disabled_spot
-    FROM parking_spot s
-    WHERE s.is_active
-      AND NOT EXISTS (SELECT 1 FROM parking_assignment pa
-                      WHERE pa.parking_spot_id = s.id AND pa.cycle_id = ${cycleId} AND pa.status = 'vigente')
-    ORDER BY s.is_disabled_spot DESC, length(s.code), s.code`;
+    SELECT s.id, s.codigo, s.para_discapacidad
+    FROM celda s
+    WHERE s.activo
+      AND NOT EXISTS (SELECT 1 FROM asignacion pa
+                      WHERE pa.celda_id = s.id AND pa.ciclo_id = ${cycleId} AND pa.estado = 'vigente')
+    ORDER BY s.para_discapacidad DESC, length(s.codigo), s.codigo`;
 }
 
 /** Ordena a los elegibles según el modo de sorteo. */
@@ -277,7 +277,7 @@ export async function confirmDraw(tx, cycleId, { mode = 'ponderado', proposal } 
   for (const p of final) {
     if (!p.vehicle) continue;
     const [row] = await tx`
-      INSERT INTO parking_assignment (cycle_id, resident_id, vehicle_id, parking_spot_id, method, ipa_score)
+      INSERT INTO asignacion (ciclo_id, residente_id, vehiculo_id, celda_id, metodo, puntaje_ipa)
       VALUES (${cycle.id}, ${p.resident_id}, ${p.vehicle.id}, ${p.spot.id}, 'sorteo', ${p.ipa})
       RETURNING id`;
     inserted.push({
@@ -291,7 +291,7 @@ export async function confirmDraw(tx, cycleId, { mode = 'ponderado', proposal } 
     });
   }
   if (!cycle.draw_date) {
-    await tx`UPDATE cycle SET draw_date = CURRENT_DATE WHERE id = ${cycle.id}`;
+    await tx`UPDATE ciclo SET fecha_sorteo = CURRENT_DATE WHERE id = ${cycle.id}`;
   }
   return { cycle, mode, assigned: inserted, waitlist, excluded_count: excluded.length };
 }

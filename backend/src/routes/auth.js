@@ -18,7 +18,7 @@ export default function authRoutes(r) {
   r.post('/auth/login', async (ctx) => {
     required(ctx.body, ['username', 'password']);
     const username = String(ctx.body.username).trim().toLowerCase();
-    const [u] = await sql`SELECT * FROM user_account WHERE lower(username) = ${username}`;
+    const [u] = await sql`SELECT * FROM cuenta_usuario WHERE lower(usuario) = ${username}`;
     const fail = () => new HttpError(401, 'Usuario o contraseña incorrectos');
     if (!u || !u.is_active) throw fail();
     if (u.is_blocked) throw new HttpError(423, 'Usuario bloqueado. Comuníquese con la administración.');
@@ -27,10 +27,10 @@ export default function authRoutes(r) {
     if (!ok) {
       const attempts = u.failed_attempts + 1;
       const block = attempts >= config.maxFailedLogins;
-      await sql`UPDATE user_account SET failed_attempts = ${attempts}, is_blocked = ${block} WHERE id = ${u.id}`;
-      await audit(null, u.id, 'login_fallido', 'user_account', u.id, { attempts });
+      await sql`UPDATE cuenta_usuario SET intentos_fallidos = ${attempts}, bloqueado = ${block} WHERE id = ${u.id}`;
+      await audit(null, u.id, 'login_fallido', 'cuenta_usuario', u.id, { attempts });
       if (block) {
-        await audit(null, u.id, 'usuario_bloqueado', 'user_account', u.id, { motivo: 'intentos fallidos' });
+        await audit(null, u.id, 'usuario_bloqueado', 'cuenta_usuario', u.id, { motivo: 'intentos fallidos' });
         await notify({
           role: 'admin',
           title: 'Usuario bloqueado',
@@ -41,8 +41,8 @@ export default function authRoutes(r) {
       }
       throw fail();
     }
-    await sql`UPDATE user_account SET failed_attempts = 0, last_login_at = now() WHERE id = ${u.id}`;
-    await audit(null, u.id, 'login', 'user_account', u.id);
+    await sql`UPDATE cuenta_usuario SET intentos_fallidos = 0, ultimo_ingreso_en = now() WHERE id = ${u.id}`;
+    await audit(null, u.id, 'login', 'cuenta_usuario', u.id);
     return { token: signToken({ sub: u.id, role: u.role }), user: publicUser(u) };
   });
 
@@ -51,13 +51,13 @@ export default function authRoutes(r) {
   r.post('/auth/change-password', ANY, async (ctx) => {
     required(ctx.body, ['current_password', 'new_password']);
     validatePassword(ctx.body.new_password);
-    const [u] = await sql`SELECT password_hash FROM user_account WHERE id = ${ctx.user.id}`;
+    const [u] = await sql`SELECT hash_contrasena FROM cuenta_usuario WHERE id = ${ctx.user.id}`;
     if (!(await verifyPassword(ctx.body.current_password, u.password_hash))) {
       throw new HttpError(400, 'La contraseña actual no es correcta');
     }
     const hash = await hashPassword(ctx.body.new_password);
-    await sql`UPDATE user_account SET password_hash = ${hash}, must_change_password = FALSE WHERE id = ${ctx.user.id}`;
-    await audit(null, ctx.user.id, 'cambio_contrasena', 'user_account', ctx.user.id);
+    await sql`UPDATE cuenta_usuario SET hash_contrasena = ${hash}, debe_cambiar_contrasena = FALSE WHERE id = ${ctx.user.id}`;
+    await audit(null, ctx.user.id, 'cambio_contrasena', 'cuenta_usuario', ctx.user.id);
     return { ok: true, message: 'Contraseña actualizada' };
   });
 
@@ -65,7 +65,7 @@ export default function authRoutes(r) {
   r.post('/auth/forgot', async (ctx) => {
     required(ctx.body, ['username']);
     const username = String(ctx.body.username).trim().toLowerCase();
-    const [u] = await sql`SELECT id, username, full_name FROM user_account WHERE lower(username) = ${username}`;
+    const [u] = await sql`SELECT id, usuario, nombre_completo FROM cuenta_usuario WHERE lower(usuario) = ${username}`;
     if (u) {
       await notify({
         role: 'admin',
@@ -73,7 +73,7 @@ export default function authRoutes(r) {
         body: `${u.full_name || u.username} (${u.username}) solicitó restablecer su contraseña. Use "Restablecer contraseña" en Usuarios.`,
         kind: 'recuperacion',
       });
-      await audit(null, u.id, 'solicitud_recuperacion', 'user_account', u.id);
+      await audit(null, u.id, 'solicitud_recuperacion', 'cuenta_usuario', u.id);
     }
     return {
       ok: true,

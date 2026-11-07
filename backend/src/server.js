@@ -34,11 +34,11 @@ if (config.backupIntervalHours > 0) {
 async function cycleReminders() {
   try {
     const cycles = await sql`
-      SELECT c.* FROM cycle c
-      WHERE c.status = 'activo' AND c.end_date - CURRENT_DATE BETWEEN 0 AND 7
-        AND NOT EXISTS (SELECT 1 FROM notification n WHERE n.kind = 'fin_ciclo_' || c.id)`;
+      SELECT c.* FROM ciclo c
+      WHERE c.estado = 'activo' AND c.fecha_fin - CURRENT_DATE BETWEEN 0 AND 7
+        AND NOT EXISTS (SELECT 1 FROM notificacion n WHERE n.categoria = 'fin_ciclo_' || c.id)`;
     for (const c of cycles) {
-      const rows = await sql`SELECT resident_id FROM parking_assignment WHERE cycle_id = ${c.id} AND status = 'vigente'`;
+      const rows = await sql`SELECT residente_id FROM asignacion WHERE ciclo_id = ${c.id} AND estado = 'vigente'`;
       await notify({
         residentIds: rows.map((x) => x.resident_id),
         title: 'Su ciclo de parqueadero está por terminar',

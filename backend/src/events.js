@@ -4,7 +4,7 @@ import { broadcast } from './ws.js';
 
 export async function audit(tx, userId, action, entityName = null, entityId = null, details = null) {
   await (tx || sql)`
-    INSERT INTO audit_log (user_account_id, action, entity_name, entity_id, details)
+    INSERT INTO auditoria (cuenta_usuario_id, accion, entidad, entidad_id, detalles)
     VALUES (${userId ?? null}, ${action}, ${entityName}, ${entityId}, ${details ? sql.json(details) : null})`;
 }
 
@@ -16,11 +16,11 @@ export async function notify(n, tx) {
   const db = tx || sql;
   let ids = n.userIds ? [...n.userIds] : [];
   if (n.role) {
-    const rows = await db`SELECT id FROM user_account WHERE role = ${n.role} AND is_active`;
+    const rows = await db`SELECT id FROM cuenta_usuario WHERE rol = ${n.role} AND activo`;
     ids.push(...rows.map((r) => r.id));
   }
   if (n.residentIds && n.residentIds.length) {
-    const rows = await db`SELECT id FROM user_account WHERE resident_id IN ${db(n.residentIds)} AND is_active`;
+    const rows = await db`SELECT id FROM cuenta_usuario WHERE residente_id IN ${db(n.residentIds)} AND activo`;
     ids.push(...rows.map((r) => r.id));
   }
   ids = [...new Set(ids)];
@@ -32,7 +32,7 @@ export async function notify(n, tx) {
     body: n.body || '',
     kind: n.kind || 'info',
   }));
-  await db`INSERT INTO notification ${db(rows)}`;
+  await db`INSERT INTO notificacion ${db(rows)}`;
   broadcast('notification', { title: n.title, body: n.body || '', kind: n.kind || 'info' }, { userIds: ids });
   return ids.length;
 }
