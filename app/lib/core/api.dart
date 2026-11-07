@@ -66,6 +66,12 @@ class ApiClient {
   /// Descarga un archivo binario (por ejemplo, reportes en PDF o Excel).
   Future<List<int>> getBytes(String path, {Map<String, dynamic>? query}) async {
     final res = await _raw(() => http.get(uri(path, query), headers: _headers));
+    // Un servidor con una versión anterior de la API responde JSON en vez del archivo
+    final type = res.headers['content-type'] ?? '';
+    if (type.contains('application/json')) {
+      throw ApiException('El servidor ($baseUrl) no tiene la versión que exporta este formato. '
+          'Use la API actualizada (por ejemplo http://localhost:3000) o actualice el servidor en la nube.');
+    }
     return res.bodyBytes;
   }
 
