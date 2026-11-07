@@ -250,6 +250,19 @@ test('reportes JSON y CSV, auditoría, dashboard y respaldo', async () => {
   const csv = await api('GET', '/reports/movimientos?format=csv');
   assert.equal(typeof csv.data, 'string');
   assert.ok(csv.data.includes('Placa'));
+  for (const [fmt, magic, type] of [['pdf', '%PDF', 'application/pdf'], ['xlsx', 'PK', 'spreadsheetml']]) {
+    for (const t of ['ocupacion', 'ciclos', 'asignaciones', 'movimientos']) {
+      const res = await fetch(`${base}/reports/${t}?format=${fmt}`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
+      assert.equal(res.status, 200, `${t}.${fmt}`);
+      assert.ok(res.headers.get('content-type').includes(type));
+      assert.ok(res.headers.get('content-disposition').includes(`.${fmt}`));
+      const buf = Buffer.from(await res.arrayBuffer());
+      assert.equal(buf.subarray(0, magic.length).toString('latin1'), magic, `${t}.${fmt} firma`);
+      if (process.env.EXPORT_DIR) (await import('node:fs')).writeFileSync(`${process.env.EXPORT_DIR}/${t}.${fmt}`, buf);
+    }
+  }
+  const bad = await api('GET', '/reports/movimientos?format=doc');
+  assert.equal(bad.status, 400);
 
   const dash = await api('GET', '/dashboard');
   assert.equal(dash.data.spots.total, 53);

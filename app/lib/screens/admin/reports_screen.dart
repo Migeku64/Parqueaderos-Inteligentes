@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,7 +10,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
 
-/// Reportes administrativos (RF08, UC-07) y exportación a CSV / Excel (RF19).
+/// Reportes administrativos (RF08, UC-07) y exportación a PDF, Excel y CSV (RF19).
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -61,10 +62,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
 
-  Future<void> _export() async {
-    final csv = await runAction(context, () => session.api.getText('/reports/$_type', query: {..._query, 'format': 'csv'}));
-    if (csv == null || !mounted) return;
-    final name = 'reporte-$_type-${isoDate(DateTime.now())}.csv';
+  static const _formats = {
+    'pdf': ('PDF', 'Se guardó el reporte en PDF:'),
+    'xlsx': ('Excel (.xlsx)', 'Se guardó el reporte de Excel:'),
+    'csv': ('CSV', 'Se guardó el archivo CSV (se abre con Excel):'),
+  };
+
+  Future<void> _export(String format) async {
+    final bytes = await runAction(
+        context, () => session.api.getBytes('/reports/$_type', query: {..._query, 'format': format}));
+    if (bytes == null || !mounted) return;
+    final name = 'reporte-$_type-${isoDate(DateTime.now())}.$format';
     try {
       Directory? dir;
       try {
@@ -74,29 +82,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
       dir ??= await getApplicationDocumentsDirectory();
       final file = File('${dir.path}${Platform.pathSeparator}$name');
-      await file.writeAsString(csv);
+      await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Reporte exportado'),
-          content: SelectableText('Se guardó el archivo (se abre con Excel):\n\n${file.path}'),
+          content: SelectableText('${_formats[format]!.$2}\n\n${file.path}'),
           actions: [
             TextButton(
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: csv));
+                Clipboard.setData(ClipboardData(text: file.path));
                 Navigator.pop(ctx);
-                showSnack(context, 'Contenido copiado al portapapeles');
+                showSnack(context, 'Ruta copiada al portapapeles');
               },
-              child: const Text('Copiar contenido'),
+              child: const Text('Copiar ruta'),
             ),
             FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Listo')),
           ],
         ),
       );
     } catch (e) {
-      await Clipboard.setData(ClipboardData(text: csv));
-      if (mounted) showSnack(context, 'No se pudo guardar el archivo; el CSV se copió al portapapeles.');
+      if (format == 'csv') {
+        await Clipboard.setData(ClipboardData(text: utf8.decode(bytes)));
+        if (mounted) showSnack(context, 'No se pudo guardar el archivo; el CSV se copió al portapapeles.');
+      } else if (mounted) {
+        showSnack(context, 'No se pudo guardar el archivo en este dispositivo.');
+      }
     }
   }
 
@@ -108,7 +120,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
           title: 'Reportes',
           subtitle: 'Seleccione el tipo de reporte y los filtros',
           actions: [
-            FilledButton.icon(onPressed: _export, icon: const Icon(Icons.download), label: const Text('Exportar CSV')),
+            PopupMenuButton<String>(
+              tooltip: 'Exportar reporte',
+              onSelected: _export,
+              itemBuilder: (_) => [
+                for (final e in _formats.entries)
+                  PopupMenuItem<String>(
+                    value: e.key,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(e.key == 'pdf'
+                          ? Icons.picture_as_pdf
+                          : e.key == 'xlsx'
+                              ? Icons.grid_on
+                              : Icons.description_outlined),
+                      title: Text(e.value.$1),
+                    ),
+                  ),
+              ],
+              child: IgnorePointer(
+                child: FilledButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.download),
+                  label: const Text('Exportar'),
+                ),
+              ),
+            ),
           ],
         ),
         Padding(

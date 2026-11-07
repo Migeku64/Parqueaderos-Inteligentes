@@ -63,6 +63,12 @@ class ApiClient {
     return utf8.decode(res.bodyBytes);
   }
 
+  /// Descarga un archivo binario (por ejemplo, reportes en PDF o Excel).
+  Future<List<int>> getBytes(String path, {Map<String, dynamic>? query}) async {
+    final res = await _raw(() => http.get(uri(path, query), headers: _headers));
+    return res.bodyBytes;
+  }
+
   Future<dynamic> _send(Future<http.Response> Function() call) async {
     final res = await _raw(call);
     final text = utf8.decode(res.bodyBytes);

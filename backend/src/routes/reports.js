@@ -1,7 +1,8 @@
-// Reportes administrativos (RF08, UC-07), exportación CSV (RF19) y dashboard (RF14).
+// Reportes administrativos (RF08, UC-07), exportación a PDF, Excel y CSV (RF19) y dashboard (RF14).
 import { sql, num } from '../db.js';
 import { badRequest, toCsv } from '../http.js';
 import { ADMIN, STAFF } from '../auth.js';
+import { toPdf, toXlsx } from '../services/export.js';
 
 const REPORTS = {
   // Ocupación por celda en un rango de fechas
@@ -144,11 +145,20 @@ export default function reportRoutes(r) {
       resident_id: q.resident_id ? Number(q.resident_id) : null,
     };
     const rows = await rep.run(f);
-    if (q.format === 'csv') {
-      const name = `reporte-${ctx.params.type}-${new Date().toISOString().slice(0, 10)}.csv`;
-      ctx.send(200, toCsv(rows, rep.columns), 'text/csv; charset=utf-8', {
-        'Content-Disposition': `attachment; filename="${name}"`,
-      });
+    const base = `reporte-${ctx.params.type}-${new Date().toISOString().slice(0, 10)}`;
+    const exporters = {
+      csv: () => [toCsv(rows, rep.columns), 'text/csv; charset=utf-8'],
+      pdf: () => [toPdf({ title: rep.title, columns: rep.columns, rows, filters: f }), 'application/pdf'],
+      xlsx: () => [
+        toXlsx({ title: rep.title, columns: rep.columns, rows, filters: f }),
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ],
+    };
+    if (q.format) {
+      const make = exporters[q.format];
+      if (!make) throw badRequest('Formato inválido (use pdf, xlsx o csv)');
+      const [body, type] = make();
+      ctx.send(200, body, type, { 'Content-Disposition': `attachment; filename="${base}.${q.format}"` });
       return;
     }
     return { type: ctx.params.type, title: rep.title, columns: rep.columns, filters: f, rows };
