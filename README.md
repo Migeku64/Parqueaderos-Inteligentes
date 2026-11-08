@@ -263,3 +263,5 @@ app/
 ```
 
 Autores: Ariadna Cardona Martinez, Julian Mauricio Montoya Rodriguez y Miguel Angel Pinilla Baez.
+
+Trabajo de grado - Ingenieria de Software - Universidad Manuela Beltran, 2026.
