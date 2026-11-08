@@ -261,3 +261,5 @@ app/
   lib/screens/resident/    pantallas del residente (mockups)
   lib/screens/shared/      mapa, movimientos, notificaciones
 ```
+
+Autores: Ariadna Cardona Martinez, Julian Mauricio Montoya Rodriguez y Miguel Angel Pinilla Baez.
