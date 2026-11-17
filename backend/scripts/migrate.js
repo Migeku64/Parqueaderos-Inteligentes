@@ -44,12 +44,12 @@ try {
     await sql.unsafe(`
       DROP TABLE IF EXISTS respaldo, auditoria, notificacion, movimiento_vehiculo, cuenta_usuario,
         asignacion, ciclo, celda, vehiculo, residente, vivienda CASCADE;
-      -- Tablas con los nombres anteriores (en inglés), si aún existen
+      -- Tablas de una versión anterior del esquema, si aún existen
       DROP TABLE IF EXISTS backup_record, audit_log, notification, vehicle_movement, user_account,
         parking_assignment, cycle, parking_spot, vehicle, resident, house CASCADE`);
     console.log('Tablas eliminadas.');
   }
-  // Bases creadas con la versión anterior (tablas en inglés): se renombran a español sin perder datos
+  // Bases creadas con una versión anterior del esquema: se actualizan sin perder datos
   const rename = await readFile(path.join(config.root, 'db', 'db.parqueadero'), 'utf8');
   await sql.begin((tx) => tx.unsafe(rename));
   const schema = await readFile(path.join(config.root, 'db', 'schema.sql'), 'utf8');
