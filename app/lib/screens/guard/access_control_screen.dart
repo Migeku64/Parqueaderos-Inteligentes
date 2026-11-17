@@ -161,7 +161,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
       color: ok ? AppColors.greenSoft : AppColors.redSoft,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         side: BorderSide(color: ok ? AppColors.green : AppColors.red, width: 2),
       ),
       child: Padding(
@@ -181,7 +181,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                decoration: BoxDecoration(color: AppColors.green, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: AppColors.green, borderRadius: BorderRadius.circular(999)),
                 child: Text(asStr(r['spot_code']),
                     style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
               ),

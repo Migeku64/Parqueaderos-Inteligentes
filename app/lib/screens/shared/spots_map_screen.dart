@@ -317,13 +317,13 @@ class _SpotTile extends StatelessWidget {
     final mine = asBool(spot['mine']);
     return Material(
       color: style.soft,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.tile),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.tile),
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.tile),
             border: Border.all(color: mine ? AppColors.blue : style.color, width: mine ? 3 : 1.5),
           ),
           padding: const EdgeInsets.all(8),

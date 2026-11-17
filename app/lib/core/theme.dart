@@ -18,6 +18,14 @@ class AppColors {
   static const muted = Color(0xFF5E6778);
 }
 
+/// Radios de esquina usados en toda la app (diseño redondeado / circular).
+class AppRadius {
+  static const card = 24.0;
+  static const tile = 20.0;
+  static const field = 30.0;
+  static const sheet = 28.0;
+}
+
 ThemeData buildTheme() {
   final scheme = ColorScheme.fromSeed(
     seedColor: AppColors.blue,
@@ -31,6 +39,73 @@ ThemeData buildTheme() {
     colorScheme: scheme,
     scaffoldBackgroundColor: AppColors.page,
     visualDensity: VisualDensity.standard,
+    // Tarjetas con esquinas muy redondeadas
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
+    ),
+    // Botones en forma de píldora
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(shape: const StadiumBorder()),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(shape: const StadiumBorder()),
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(shape: CircleBorder()),
+    // Campos de texto ovalados
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.field)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderSide: const BorderSide(color: Color(0xFFD5DAE3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderSide: const BorderSide(color: AppColors.blue, width: 2),
+      ),
+    ),
+    chipTheme: const ChipThemeData(shape: StadiumBorder()),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
+    ),
+    navigationDrawerTheme: const NavigationDrawerThemeData(indicatorShape: StadiumBorder()),
+    navigationRailTheme: const NavigationRailThemeData(indicatorShape: StadiumBorder()),
   );
 }
 

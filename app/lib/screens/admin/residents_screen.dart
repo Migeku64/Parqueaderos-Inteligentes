@@ -109,7 +109,7 @@ class _ResidentTile extends StatelessWidget {
       elevation: 0,
       color: Colors.white,
       margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(

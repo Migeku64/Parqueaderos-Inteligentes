@@ -171,9 +171,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 14),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                             decoration: BoxDecoration(
-                                color: AppColors.redSoft, borderRadius: BorderRadius.circular(8)),
+                                color: AppColors.redSoft, borderRadius: BorderRadius.circular(AppRadius.tile)),
                             child: Text(_error!, style: const TextStyle(color: AppColors.red)),
                           ),
                         ],
@@ -184,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: FilledButton(
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              shape: const StadiumBorder(),
                             ),
                             onPressed: _busy ? null : _login,
                             child: _busy

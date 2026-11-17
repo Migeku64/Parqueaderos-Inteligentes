@@ -31,7 +31,7 @@ class ResidentDrawsScreen extends StatelessWidget {
                 child: Container(
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: AppColors.blue, borderRadius: BorderRadius.circular(18)),
+                  decoration: BoxDecoration(color: AppColors.blue, borderRadius: BorderRadius.circular(28)),
                   child: Column(
                     children: [
                       const Text('SORTEOS',

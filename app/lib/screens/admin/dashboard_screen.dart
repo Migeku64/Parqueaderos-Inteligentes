@@ -148,7 +148,7 @@ class DashboardScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
             value: total == 0 ? 0 : done / total,
             minHeight: 10,
@@ -192,7 +192,7 @@ class _WeekChart extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           color: AppColors.blueLight,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12), bottom: Radius.circular(4)),
                         ),
                       ),
                     ),

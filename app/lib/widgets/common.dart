@@ -193,14 +193,14 @@ class StatCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: color.withAlpha(30), shape: BoxShape.circle),
               child: Icon(icon, color: color),
             ),
             const SizedBox(width: 12),
@@ -243,7 +243,7 @@ class SectionCard extends StatelessWidget {
       elevation: 0,
       color: Colors.white,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
       child: Padding(
         padding: EdgeInsets.all(padding),
         child: Column(
@@ -279,10 +279,10 @@ class Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
         color: soft ?? color.withAlpha(28),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
     );
@@ -303,7 +303,7 @@ class PlateBadge extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: big ? 18 : 8, vertical: big ? 8 : 3),
       decoration: BoxDecoration(
         color: const Color(0xFFFFD43B),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(big ? 14 : 8),
         border: Border.all(color: Colors.black87, width: big ? 2 : 1),
       ),
       child: Text(
@@ -324,7 +324,16 @@ InputDecoration inputDeco(String label, {IconData? icon, String? hint, String? h
       hintText: hint,
       helperText: helper,
       prefixIcon: icon == null ? null : Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.field)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderSide: const BorderSide(color: Color(0xFFD5DAE3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderSide: const BorderSide(color: AppColors.blue, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       filled: true,
       fillColor: Colors.white,
       isDense: true,
@@ -371,6 +380,7 @@ void showSnack(BuildContext context, String message, {bool error = false}) {
       content: Text(message),
       backgroundColor: error ? AppColors.red : null,
       behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
     ));
 }
 
