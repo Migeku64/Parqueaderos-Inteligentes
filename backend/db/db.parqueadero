@@ -1,0 +1,331 @@
+-- =====================================================================
+--  MIGRACIÓN DE NOMBRES: INGLÉS → ESPAÑOL
+--  Sistema de Gestión de Parqueaderos Comunitarios
+--  Conjunto Residencial Nueva Castilla Etapa 3
+--  Archivo: backend/db/db.parqueadero  (script SQL de PostgreSQL)
+-- =====================================================================
+--
+--  ¿Para qué sirve?
+--    La primera versión de la base de datos usaba nombres en inglés
+--    (house, resident, vehicle, ...). Este script renombra al español las
+--    tablas, columnas, secuencias, restricciones e índices, CONSERVANDO
+--    TODOS LOS DATOS. No borra ni crea registros.
+--
+--  ¿Cuándo se ejecuta?
+--    Automáticamente: backend/scripts/migrate.js lo corre antes de
+--    schema.sql y dentro de una transacción. Si algo falla, PostgreSQL
+--    deshace todo y la base queda como estaba.
+--
+--  ¿Se puede ejecutar varias veces?
+--    Sí. Solo actúa si encuentra la tabla antigua "house" y aún no existe
+--    "vivienda". En cualquier otro caso termina sin hacer ningún cambio.
+--
+--  Equivalencia de tablas
+--  ┌────┬────────────────────┬─────────────────────┬────────────────────────────────┐
+--  │ #  │ Antes (inglés)     │ Ahora (español)     │ Qué guarda                     │
+--  ├────┼────────────────────┼─────────────────────┼────────────────────────────────┤
+--  │ 1  │ house              │ vivienda            │ Casas del conjunto             │
+--  │ 2  │ resident           │ residente           │ Residentes y su estado de pago │
+--  │ 3  │ vehicle            │ vehiculo            │ Vehículos de cada residente    │
+--  │ 4  │ parking_spot       │ celda               │ Espacios del parqueadero       │
+--  │ 5  │ cycle              │ ciclo               │ Periodos de asignación         │
+--  │ 6  │ parking_assignment │ asignacion          │ Celda asignada en cada ciclo   │
+--  │ 7  │ user_account       │ cuenta_usuario      │ Usuarios de la aplicación      │
+--  │ 8  │ vehicle_movement   │ movimiento_vehiculo │ Entradas y salidas             │
+--  │ 9  │ notification       │ notificacion        │ Avisos a los usuarios          │
+--  │ 10 │ audit_log          │ auditoria           │ Quién hizo qué y cuándo        │
+--  │ 11 │ backup_record      │ respaldo            │ Copias de seguridad            │
+--  └────┴────────────────────┴─────────────────────┴────────────────────────────────┘
+--
+--  Pasos del script
+--    Paso 1. Verificar si hay algo que migrar
+--    Paso 2. Renombrar tablas, columnas y secuencias (una sección por tabla)
+--    Paso 3. Renombrar las restricciones e índices definidos en el esquema
+--    Paso 4. Renombrar las restricciones que PostgreSQL creó automáticamente
+--    Paso 5. Actualizar los nombres de tabla guardados en la auditoría
+-- =====================================================================
+
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+
+  -- ===================================================================
+  --  PASO 1. Verificar si hay algo que migrar
+  -- ===================================================================
+  IF to_regclass('public.house') IS NULL          -- no hay tablas antiguas
+     OR to_regclass('public.vivienda') IS NOT NULL  -- o ya se migró antes
+  THEN
+    RETURN;  -- nada que migrar
+  END IF;
+
+  -- ===================================================================
+  --  PASO 2. Renombrar tablas, columnas y secuencias
+  -- ===================================================================
+
+  -- -------------------------------------------------------------------
+  --  2.1  house  →  vivienda
+  -- -------------------------------------------------------------------
+  ALTER TABLE house    RENAME TO vivienda;
+  ALTER TABLE vivienda RENAME COLUMN block             TO bloque;
+  ALTER TABLE vivienda RENAME COLUMN number            TO numero;
+  ALTER TABLE vivienda RENAME COLUMN is_owner_occupied TO habitada_por_propietario;
+  ALTER SEQUENCE IF EXISTS house_id_seq RENAME TO vivienda_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.2  resident  →  residente
+  -- -------------------------------------------------------------------
+  ALTER TABLE resident  RENAME TO residente;
+  ALTER TABLE residente RENAME COLUMN house_id        TO vivienda_id;
+  ALTER TABLE residente RENAME COLUMN full_name       TO nombre_completo;
+  ALTER TABLE residente RENAME COLUMN document_type   TO tipo_documento;
+  ALTER TABLE residente RENAME COLUMN document_number TO numero_documento;
+  ALTER TABLE residente RENAME COLUMN phone           TO telefono;
+  ALTER TABLE residente RENAME COLUMN email           TO correo;
+  ALTER TABLE residente RENAME COLUMN status          TO estado;
+  ALTER TABLE residente RENAME COLUMN debt            TO deuda;
+  ALTER TABLE residente RENAME COLUMN admin_score     TO puntaje_administrativo;
+  ALTER TABLE residente RENAME COLUMN has_disability  TO tiene_discapacidad;
+  ALTER TABLE residente RENAME COLUMN created_at      TO creado_en;
+  ALTER TABLE residente RENAME COLUMN updated_at      TO actualizado_en;
+  ALTER SEQUENCE IF EXISTS resident_id_seq RENAME TO residente_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.3  vehicle  →  vehiculo
+  -- -------------------------------------------------------------------
+  ALTER TABLE vehicle  RENAME TO vehiculo;
+  ALTER TABLE vehiculo RENAME COLUMN resident_id TO residente_id;
+  ALTER TABLE vehiculo RENAME COLUMN plate       TO placa;
+  ALTER TABLE vehiculo RENAME COLUMN type        TO tipo;
+  ALTER TABLE vehiculo RENAME COLUMN brand       TO marca;
+  ALTER TABLE vehiculo RENAME COLUMN model       TO modelo;
+  ALTER TABLE vehiculo RENAME COLUMN is_active   TO activo;
+  ALTER TABLE vehiculo RENAME COLUMN created_at  TO creado_en;
+  ALTER SEQUENCE IF EXISTS vehicle_id_seq RENAME TO vehiculo_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.4  parking_spot  →  celda
+  -- -------------------------------------------------------------------
+  ALTER TABLE parking_spot RENAME TO celda;
+  ALTER TABLE celda        RENAME COLUMN code             TO codigo;
+  ALTER TABLE celda        RENAME COLUMN is_disabled_spot TO para_discapacidad;
+  ALTER TABLE celda        RENAME COLUMN is_active        TO activo;
+  ALTER TABLE celda        RENAME COLUMN is_occupied      TO ocupada;
+  ALTER TABLE celda        RENAME COLUMN notes            TO observaciones;
+  ALTER SEQUENCE IF EXISTS parking_spot_id_seq RENAME TO celda_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.5  cycle  →  ciclo
+  -- -------------------------------------------------------------------
+  ALTER TABLE cycle RENAME TO ciclo;
+  ALTER TABLE ciclo RENAME COLUMN name       TO nombre;
+  ALTER TABLE ciclo RENAME COLUMN start_date TO fecha_inicio;
+  ALTER TABLE ciclo RENAME COLUMN end_date   TO fecha_fin;
+  ALTER TABLE ciclo RENAME COLUMN draw_date  TO fecha_sorteo;
+  ALTER TABLE ciclo RENAME COLUMN status     TO estado;
+  ALTER TABLE ciclo RENAME COLUMN created_at TO creado_en;
+  ALTER SEQUENCE IF EXISTS cycle_id_seq RENAME TO ciclo_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.6  parking_assignment  →  asignacion
+  -- -------------------------------------------------------------------
+  ALTER TABLE parking_assignment RENAME TO asignacion;
+  ALTER TABLE asignacion         RENAME COLUMN cycle_id        TO ciclo_id;
+  ALTER TABLE asignacion         RENAME COLUMN resident_id     TO residente_id;
+  ALTER TABLE asignacion         RENAME COLUMN vehicle_id      TO vehiculo_id;
+  ALTER TABLE asignacion         RENAME COLUMN parking_spot_id TO celda_id;
+  ALTER TABLE asignacion         RENAME COLUMN method          TO metodo;
+  ALTER TABLE asignacion         RENAME COLUMN ipa_score       TO puntaje_ipa;
+  ALTER TABLE asignacion         RENAME COLUMN assigned_at     TO asignado_en;
+  ALTER TABLE asignacion         RENAME COLUMN released_at     TO liberado_en;
+  ALTER TABLE asignacion         RENAME COLUMN status          TO estado;
+  ALTER TABLE asignacion         RENAME COLUMN notes           TO observaciones;
+  ALTER SEQUENCE IF EXISTS parking_assignment_id_seq RENAME TO asignacion_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.7  user_account  →  cuenta_usuario
+  -- -------------------------------------------------------------------
+  ALTER TABLE user_account   RENAME TO cuenta_usuario;
+  ALTER TABLE cuenta_usuario RENAME COLUMN resident_id          TO residente_id;
+  ALTER TABLE cuenta_usuario RENAME COLUMN username             TO usuario;
+  ALTER TABLE cuenta_usuario RENAME COLUMN full_name            TO nombre_completo;
+  ALTER TABLE cuenta_usuario RENAME COLUMN password_hash        TO hash_contrasena;
+  ALTER TABLE cuenta_usuario RENAME COLUMN role                 TO rol;
+  ALTER TABLE cuenta_usuario RENAME COLUMN is_active            TO activo;
+  ALTER TABLE cuenta_usuario RENAME COLUMN is_blocked           TO bloqueado;
+  ALTER TABLE cuenta_usuario RENAME COLUMN failed_attempts      TO intentos_fallidos;
+  ALTER TABLE cuenta_usuario RENAME COLUMN must_change_password TO debe_cambiar_contrasena;
+  ALTER TABLE cuenta_usuario RENAME COLUMN last_login_at        TO ultimo_ingreso_en;
+  ALTER TABLE cuenta_usuario RENAME COLUMN created_at           TO creado_en;
+  ALTER SEQUENCE IF EXISTS user_account_id_seq RENAME TO cuenta_usuario_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.8  vehicle_movement  →  movimiento_vehiculo
+  -- -------------------------------------------------------------------
+  ALTER TABLE vehicle_movement    RENAME TO movimiento_vehiculo;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN plate           TO placa;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN vehicle_id      TO vehiculo_id;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN parking_spot_id TO celda_id;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN assignment_id   TO asignacion_id;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN type            TO tipo;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN authorized      TO autorizado;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN source          TO origen;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN reason          TO motivo;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN recorded_by     TO registrado_por;
+  ALTER TABLE movimiento_vehiculo RENAME COLUMN recorded_at     TO registrado_en;
+  ALTER SEQUENCE IF EXISTS vehicle_movement_id_seq RENAME TO movimiento_vehiculo_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.9  notification  →  notificacion
+  -- -------------------------------------------------------------------
+  ALTER TABLE notification RENAME TO notificacion;
+  ALTER TABLE notificacion RENAME COLUMN user_account_id TO cuenta_usuario_id;
+  ALTER TABLE notificacion RENAME COLUMN target_role     TO rol_destino;
+  ALTER TABLE notificacion RENAME COLUMN title           TO titulo;
+  ALTER TABLE notificacion RENAME COLUMN body            TO cuerpo;
+  ALTER TABLE notificacion RENAME COLUMN kind            TO categoria;
+  ALTER TABLE notificacion RENAME COLUMN created_at      TO creado_en;
+  ALTER TABLE notificacion RENAME COLUMN read_at         TO leido_en;
+  ALTER SEQUENCE IF EXISTS notification_id_seq RENAME TO notificacion_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.10  audit_log  →  auditoria
+  -- -------------------------------------------------------------------
+  ALTER TABLE audit_log RENAME TO auditoria;
+  ALTER TABLE auditoria RENAME COLUMN user_account_id TO cuenta_usuario_id;
+  ALTER TABLE auditoria RENAME COLUMN action          TO accion;
+  ALTER TABLE auditoria RENAME COLUMN entity_name     TO entidad;
+  ALTER TABLE auditoria RENAME COLUMN entity_id       TO entidad_id;
+  ALTER TABLE auditoria RENAME COLUMN performed_at    TO realizado_en;
+  ALTER TABLE auditoria RENAME COLUMN details         TO detalles;
+  ALTER SEQUENCE IF EXISTS audit_log_id_seq RENAME TO auditoria_id_seq;
+
+  -- -------------------------------------------------------------------
+  --  2.11  backup_record  →  respaldo
+  -- -------------------------------------------------------------------
+  ALTER TABLE backup_record RENAME TO respaldo;
+  ALTER TABLE respaldo      RENAME COLUMN file_name  TO nombre_archivo;
+  ALTER TABLE respaldo      RENAME COLUMN size_bytes TO tamano_bytes;
+  ALTER TABLE respaldo      RENAME COLUMN status     TO estado;
+  ALTER TABLE respaldo      RENAME COLUMN trigger    TO disparador;
+  ALTER TABLE respaldo      RENAME COLUMN created_at TO creado_en;
+  ALTER SEQUENCE IF EXISTS backup_record_id_seq RENAME TO respaldo_id_seq;
+
+  -- ===================================================================
+  --  PASO 3. Renombrar las restricciones e índices definidos en el esquema
+  -- ===================================================================
+  -- Restricciones con nombre propio (UNIQUE y CHECK)
+  ALTER TABLE vivienda       RENAME CONSTRAINT house_block_number_uk  TO vivienda_bloque_numero_uk;
+  ALTER TABLE ciclo          RENAME CONSTRAINT cycle_dates_ck         TO ciclo_fechas_ck;
+  ALTER TABLE ciclo          RENAME CONSTRAINT cycle_length_ck        TO ciclo_duracion_ck;
+  ALTER TABLE cuenta_usuario RENAME CONSTRAINT resident_role_ck       TO cuenta_residente_rol_ck;
+  ALTER TABLE notificacion   RENAME CONSTRAINT notification_target_ck TO notificacion_destino_ck;
+
+  -- Índices
+  ALTER INDEX IF EXISTS resident_house_idx           RENAME TO residente_vivienda_idx;
+  ALTER INDEX IF EXISTS vehicle_resident_idx         RENAME TO vehiculo_residente_idx;
+  ALTER INDEX IF EXISTS cycle_one_active_uk          RENAME TO ciclo_un_activo_uk;
+  ALTER INDEX IF EXISTS assignment_spot_cycle_uk     RENAME TO asignacion_celda_ciclo_uk;
+  ALTER INDEX IF EXISTS assignment_resident_cycle_uk RENAME TO asignacion_residente_ciclo_uk;
+  ALTER INDEX IF EXISTS assignment_resident_idx      RENAME TO asignacion_residente_idx;
+  ALTER INDEX IF EXISTS movement_recorded_idx        RENAME TO movimiento_registrado_idx;
+  ALTER INDEX IF EXISTS movement_plate_idx           RENAME TO movimiento_placa_idx;
+  ALTER INDEX IF EXISTS notification_user_idx        RENAME TO notificacion_usuario_idx;
+  ALTER INDEX IF EXISTS audit_performed_idx          RENAME TO auditoria_realizado_idx;
+
+  -- ===================================================================
+  --  PASO 4. Renombrar las restricciones creadas automáticamente
+  -- ===================================================================
+  -- PostgreSQL les puso nombre al crear las tablas (llaves primarias,
+  -- foráneas, únicas y CHECK). Si alguna no existe en una base concreta,
+  -- se omite sin detener la migración.
+  FOR r IN
+    SELECT * FROM (VALUES
+      -- vivienda
+      ('vivienda',            'house_pkey',                              'vivienda_pkey'),
+      -- residente
+      ('residente',           'resident_admin_score_check',              'residente_puntaje_administrativo_check'),
+      ('residente',           'resident_debt_check',                     'residente_deuda_check'),
+      ('residente',           'resident_document_type_check',            'residente_tipo_documento_check'),
+      ('residente',           'resident_status_check',                   'residente_estado_check'),
+      ('residente',           'resident_house_id_fkey',                  'residente_vivienda_id_fkey'),
+      ('residente',           'resident_pkey',                           'residente_pkey'),
+      ('residente',           'resident_document_number_key',            'residente_numero_documento_key'),
+      -- vehiculo
+      ('vehiculo',            'vehicle_plate_check',                     'vehiculo_placa_check'),
+      ('vehiculo',            'vehicle_type_check',                      'vehiculo_tipo_check'),
+      ('vehiculo',            'vehicle_resident_id_fkey',                'vehiculo_residente_id_fkey'),
+      ('vehiculo',            'vehicle_pkey',                            'vehiculo_pkey'),
+      ('vehiculo',            'vehicle_plate_key',                       'vehiculo_placa_key'),
+      -- celda
+      ('celda',               'parking_spot_pkey',                       'celda_pkey'),
+      ('celda',               'parking_spot_code_key',                   'celda_codigo_key'),
+      -- ciclo
+      ('ciclo',               'cycle_status_check',                      'ciclo_estado_check'),
+      ('ciclo',               'cycle_pkey',                              'ciclo_pkey'),
+      -- asignacion
+      ('asignacion',          'parking_assignment_method_check',         'asignacion_metodo_check'),
+      ('asignacion',          'parking_assignment_status_check',         'asignacion_estado_check'),
+      ('asignacion',          'parking_assignment_cycle_id_fkey',        'asignacion_ciclo_id_fkey'),
+      ('asignacion',          'parking_assignment_parking_spot_id_fkey', 'asignacion_celda_id_fkey'),
+      ('asignacion',          'parking_assignment_resident_id_fkey',     'asignacion_residente_id_fkey'),
+      ('asignacion',          'parking_assignment_vehicle_id_fkey',      'asignacion_vehiculo_id_fkey'),
+      ('asignacion',          'parking_assignment_pkey',                 'asignacion_pkey'),
+      -- cuenta_usuario
+      ('cuenta_usuario',      'user_account_role_check',                 'cuenta_usuario_rol_check'),
+      ('cuenta_usuario',      'user_account_resident_id_fkey',           'cuenta_usuario_residente_id_fkey'),
+      ('cuenta_usuario',      'user_account_pkey',                       'cuenta_usuario_pkey'),
+      ('cuenta_usuario',      'user_account_resident_id_key',            'cuenta_usuario_residente_id_key'),
+      ('cuenta_usuario',      'user_account_username_key',               'cuenta_usuario_usuario_key'),
+      -- movimiento_vehiculo
+      ('movimiento_vehiculo', 'vehicle_movement_source_check',           'movimiento_vehiculo_origen_check'),
+      ('movimiento_vehiculo', 'vehicle_movement_type_check',             'movimiento_vehiculo_tipo_check'),
+      ('movimiento_vehiculo', 'vehicle_movement_assignment_id_fkey',     'movimiento_vehiculo_asignacion_id_fkey'),
+      ('movimiento_vehiculo', 'vehicle_movement_parking_spot_id_fkey',   'movimiento_vehiculo_celda_id_fkey'),
+      ('movimiento_vehiculo', 'vehicle_movement_recorded_by_fkey',       'movimiento_vehiculo_registrado_por_fkey'),
+      ('movimiento_vehiculo', 'vehicle_movement_vehicle_id_fkey',        'movimiento_vehiculo_vehiculo_id_fkey'),
+      ('movimiento_vehiculo', 'vehicle_movement_pkey',                   'movimiento_vehiculo_pkey'),
+      -- notificacion
+      ('notificacion',        'notification_target_role_check',          'notificacion_rol_destino_check'),
+      ('notificacion',        'notification_user_account_id_fkey',       'notificacion_cuenta_usuario_id_fkey'),
+      ('notificacion',        'notification_pkey',                       'notificacion_pkey'),
+      -- auditoria
+      ('auditoria',           'audit_log_user_account_id_fkey',          'auditoria_cuenta_usuario_id_fkey'),
+      ('auditoria',           'audit_log_pkey',                          'auditoria_pkey'),
+      -- respaldo
+      ('respaldo',            'backup_record_status_check',              'respaldo_estado_check'),
+      ('respaldo',            'backup_record_trigger_check',             'respaldo_disparador_check'),
+      ('respaldo',            'backup_record_pkey',                      'respaldo_pkey')
+    ) AS c(tabla, nombre_anterior, nombre_nuevo)
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE %I RENAME CONSTRAINT %I TO %I',
+                     r.tabla, r.nombre_anterior, r.nombre_nuevo);
+    EXCEPTION WHEN undefined_object THEN
+      NULL;  -- la restricción no existe en esta base: se omite
+    END;
+  END LOOP;
+
+  -- ===================================================================
+  --  PASO 5. Actualizar los nombres de tabla guardados en la auditoría
+  -- ===================================================================
+  -- La auditoría guarda en la columna "entidad" el nombre de la tabla
+  -- afectada; se traducen para que coincidan con los nombres nuevos.
+  UPDATE auditoria SET entidad = CASE entidad
+      WHEN 'house'              THEN 'vivienda'
+      WHEN 'resident'           THEN 'residente'
+      WHEN 'vehicle'            THEN 'vehiculo'
+      WHEN 'parking_spot'       THEN 'celda'
+      WHEN 'cycle'              THEN 'ciclo'
+      WHEN 'parking_assignment' THEN 'asignacion'
+      WHEN 'user_account'       THEN 'cuenta_usuario'
+      WHEN 'vehicle_movement'   THEN 'movimiento_vehiculo'
+      WHEN 'notification'       THEN 'notificacion'
+      WHEN 'audit_log'          THEN 'auditoria'
+      WHEN 'backup_record'      THEN 'respaldo'
+      ELSE entidad
+  END;
+
+  RAISE NOTICE 'Base de datos migrada a nombres en español (11 tablas).';
+END
+$$;

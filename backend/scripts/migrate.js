@@ -50,7 +50,7 @@ try {
     console.log('Tablas eliminadas.');
   }
   // Bases creadas con la versión anterior (tablas en inglés): se renombran a español sin perder datos
-  const rename = await readFile(path.join(config.root, 'db', 'migrar_a_espanol.sql'), 'utf8');
+  const rename = await readFile(path.join(config.root, 'db', 'db.parqueadero'), 'utf8');
   await sql.begin((tx) => tx.unsafe(rename));
   const schema = await readFile(path.join(config.root, 'db', 'schema.sql'), 'utf8');
   await sql.begin((tx) => tx.unsafe(schema));

@@ -7,6 +7,7 @@ Sistema para la gestión y asignación de parqueaderos comunitarios (trabajo de 
 | App para **Android, iOS y Windows** | Flutter (un solo código) | `app/` |
 | API REST + tiempo real (WebSocket) | Node.js 20+ | `backend/` |
 | Base de datos | PostgreSQL 14+ | `backend/db/schema.sql` |
+| Migración de nombres (inglés → español) | SQL (PostgreSQL) | `backend/db/db.parqueadero` |
 
 Roles: **Administrador**, **Guarda de seguridad** y **Residente** (Tabla 1 del documento).
 
@@ -240,13 +241,46 @@ flutter test
 ```
 En Windows (PowerShell): `$env:DATABASE_URL="postgres://..."; npm test`.
 
+## 10. Base de datos: migración de nombres al español
+
+La primera versión de la base usaba nombres en inglés. El script
+[`backend/db/db.parqueadero`](backend/db/db.parqueadero) los cambia al español
+**sin borrar ningún dato**: renombra tablas, columnas, secuencias, restricciones e índices.
+
+| # | Antes (inglés) | Ahora (español) | Qué guarda |
+|---|---|---|---|
+| 1 | `house` | `vivienda` | Casas del conjunto |
+| 2 | `resident` | `residente` | Residentes y su estado de pago |
+| 3 | `vehicle` | `vehiculo` | Vehículos de cada residente |
+| 4 | `parking_spot` | `celda` | Espacios del parqueadero |
+| 5 | `cycle` | `ciclo` | Periodos de asignación |
+| 6 | `parking_assignment` | `asignacion` | Celda asignada en cada ciclo |
+| 7 | `user_account` | `cuenta_usuario` | Usuarios de la aplicación |
+| 8 | `vehicle_movement` | `movimiento_vehiculo` | Entradas y salidas |
+| 9 | `notification` | `notificacion` | Avisos a los usuarios |
+| 10 | `audit_log` | `auditoria` | Quién hizo qué y cuándo |
+| 11 | `backup_record` | `respaldo` | Copias de seguridad |
+
+El script está dividido en cinco pasos:
+
+1. **Verificar** si hay algo que migrar (si la base ya está en español, no hace nada).
+2. **Renombrar** tablas, columnas y secuencias, con una sección por tabla.
+3. **Renombrar** las restricciones e índices definidos en el esquema.
+4. **Renombrar** las restricciones que PostgreSQL creó automáticamente (llaves primarias y foráneas).
+5. **Actualizar** los nombres de tabla guardados en la auditoría.
+
+No hay que ejecutarlo a mano: `scripts/migrate.js` lo corre antes de `schema.sql` cada vez que se usa
+`npm run db:migrate`, `INICIAR.bat` o el despliegue en Render, siempre
+dentro de una transacción, así que si algo falla la base queda como estaba.
+Se puede ejecutar las veces que sea sin riesgo.
+
 ## Estructura
 
 ```
 backend/
   db/schema.sql            tablas (vivienda, residente, vehiculo, celda, ciclo, asignacion, cuenta_usuario,
                            movimiento_vehiculo, notificacion, auditoria, respaldo)
-  db/migrar_a_espanol.sql  convierte una base creada con la versión anterior (tablas en inglés)
+  db/db.parqueadero        convierte una base creada con la versión anterior (tablas en inglés)
                            a los nombres en español sin perder datos (lo ejecuta migrate.js)
   src/naming.js            equivalencia entre columnas de la base y campos de la API
   src/routes/              endpoints REST por módulo
