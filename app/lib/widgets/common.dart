@@ -156,7 +156,7 @@ class PageHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.text)),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
                 if (subtitle != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
@@ -192,7 +192,6 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -241,7 +240,6 @@ class SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Colors.white,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
       child: Padding(
@@ -324,18 +322,7 @@ InputDecoration inputDeco(String label, {IconData? icon, String? hint, String? h
       hintText: hint,
       helperText: helper,
       prefixIcon: icon == null ? null : Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.field)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        borderSide: const BorderSide(color: Color(0xFFD5DAE3)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        borderSide: const BorderSide(color: AppColors.blue, width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      filled: true,
-      fillColor: Colors.white,
+      // bordes ovalados, relleno y colores vienen del tema (claro u oscuro)
       isDense: true,
     );
 

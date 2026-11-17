@@ -305,53 +305,102 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
   }
 }
 
-class _SpotTile extends StatelessWidget {
+/// Celda del mapa. Al pasar el cursor se agranda un poco, se ilumina con el
+/// color de su estado y muestra un globo con el detalle.
+class _SpotTile extends StatefulWidget {
   const _SpotTile({required this.spot, this.onTap});
 
   final Map<String, dynamic> spot;
   final VoidCallback? onTap;
 
   @override
+  State<_SpotTile> createState() => _SpotTileState();
+}
+
+class _SpotTileState extends State<_SpotTile> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
+    final spot = widget.spot;
     final style = SpotStyle.of(asStr(spot['state']));
     final mine = asBool(spot['mine']);
-    return Material(
-      color: style.soft,
-      borderRadius: BorderRadius.circular(AppRadius.tile),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.tile),
-        onTap: onTap,
-        child: Container(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final card = Theme.of(context).cardColor;
+    const duration = Duration(milliseconds: 180);
+
+    // Fondo: suave en modo claro, tinte del color del estado en modo oscuro
+    final Color bg = dark
+        ? Color.alphaBlend(style.color.withAlpha(_hover ? 80 : 45), card)
+        : (_hover ? Color.alphaBlend(style.color.withAlpha(45), style.soft) : style.soft);
+    final Color textColor = dark ? Colors.white.withAlpha(230) : AppColors.text;
+    final Color borderColor = mine ? AppColors.blueLight : style.color;
+    final plate = spot['plate'] != null ? asStr(spot['plate']) : null;
+    final tip = '${asStr(spot['code'])} · ${style.label}${plate != null ? ' · $plate' : ''}'
+        '${asBool(spot['is_disabled_spot']) ? ' · Discapacidad' : ''}';
+    final radius = BorderRadius.circular(AppRadius.tile);
+
+    return Tooltip(
+      message: tip,
+      waitDuration: const Duration(milliseconds: 400),
+      child: AnimatedScale(
+        scale: _hover ? 1.05 : 1,
+        duration: duration,
+        curve: Curves.easeOutBack,
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.tile),
-            border: Border.all(color: mine ? AppColors.blue : style.color, width: mine ? 3 : 1.5),
+            color: bg,
+            borderRadius: radius,
+            border: Border.all(color: borderColor, width: mine ? 3 : (_hover ? 2.5 : 1.5)),
+            boxShadow: _hover
+                ? [BoxShadow(color: style.color.withAlpha(dark ? 110 : 90), blurRadius: 18, offset: const Offset(0, 6))]
+                : const [],
           ),
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(asStr(spot['code']),
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: style.color)),
-                  if (asBool(spot['is_disabled_spot']))
-                    const Padding(
-                      padding: EdgeInsets.only(left: 2),
-                      child: Icon(Icons.accessible, size: 16, color: AppColors.blue),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: radius,
+              hoverColor: Colors.transparent,
+              splashColor: style.color.withAlpha(60),
+              onHover: (h) => setState(() => _hover = h),
+              onTap: widget.onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(asStr(spot['code']),
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: style.color)),
+                        if (asBool(spot['is_disabled_spot']))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 2),
+                            child: Icon(Icons.accessible, size: 16, color: dark ? AppColors.blueLight : AppColors.blue),
+                          ),
+                      ],
                     ),
-                ],
+                    const SizedBox(height: 4),
+                    AnimatedScale(
+                      scale: _hover ? 1.2 : 1,
+                      duration: duration,
+                      curve: Curves.easeOutBack,
+                      child: Icon(style.icon, color: style.color),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      mine ? 'SU CELDA' : (plate ?? style.label),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Icon(style.icon, color: style.color),
-              const SizedBox(height: 4),
-              Text(
-                mine ? 'SU CELDA' : (spot['plate'] != null ? asStr(spot['plate']) : style.label),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text),
-              ),
-            ],
+            ),
           ),
         ),
       ),

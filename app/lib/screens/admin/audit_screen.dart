@@ -91,7 +91,7 @@ class _AuditTabState extends State<_AuditTab> {
                         final a = list[i];
                         final details = a['details'];
                         return Container(
-                          color: Colors.white,
+                          color: Theme.of(context).cardColor,
                           child: ListTile(
                             dense: true,
                             leading: const Icon(Icons.receipt_long, color: AppColors.blue),
@@ -175,7 +175,6 @@ class _BackupsTabState extends State<_BackupsTab> {
           for (final b in list)
             Card(
               elevation: 0,
-              color: Colors.white,
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
               child: ListTile(
                 leading: Icon(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Colores tomados de los mockups (Anexo 5): azul de fondo, botones negros, verde de estado activo.
 class AppColors {
@@ -15,7 +16,7 @@ class AppColors {
   static const greySoft = Color(0xFFEDEFF3);
   static const page = Color(0xFFF4F6FB);
   static const text = Color(0xFF1C2333);
-  static const muted = Color(0xFF5E6778);
+  static const muted = Color(0xFF6F788A);
 }
 
 /// Radios de esquina usados en toda la app (diseño redondeado / circular).
@@ -26,25 +27,55 @@ class AppRadius {
   static const sheet = 28.0;
 }
 
-ThemeData buildTheme() {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: AppColors.blue,
-    primary: AppColors.blue,
-    secondary: AppColors.green,
-    error: AppColors.red,
-    brightness: Brightness.light,
-  );
+/// Colores del modo oscuro.
+class DarkColors {
+  static const page = Color(0xFF0F1422);
+  static const surface = Color(0xFF151B2A);
+  static const card = Color(0xFF1C2435);
+  static const border = Color(0xFF2E3850);
+  static const primary = Color(0xFF4F7FE8);
+}
+
+ThemeData buildTheme({Brightness brightness = Brightness.light}) {
+  final dark = brightness == Brightness.dark;
+  final scheme = dark
+      ? ColorScheme.fromSeed(
+          seedColor: AppColors.blue,
+          brightness: Brightness.dark,
+          primary: DarkColors.primary,
+          onPrimary: Colors.white,
+          secondary: AppColors.green,
+          error: AppColors.red,
+          surface: DarkColors.surface,
+        )
+      : ColorScheme.fromSeed(
+          seedColor: AppColors.blue,
+          primary: AppColors.blue,
+          secondary: AppColors.green,
+          error: AppColors.red,
+          brightness: Brightness.light,
+        );
+  final cardColor = dark ? DarkColors.card : Colors.white;
+  final borderColor = dark ? DarkColors.border : const Color(0xFFD5DAE3);
   return ThemeData(
     useMaterial3: true,
+    brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: AppColors.page,
+    scaffoldBackgroundColor: dark ? DarkColors.page : AppColors.page,
+    cardColor: cardColor,
+    canvasColor: dark ? DarkColors.surface : null,
+    dividerColor: borderColor,
     visualDensity: VisualDensity.standard,
     // Tarjetas con esquinas muy redondeadas
     cardTheme: CardThemeData(
       elevation: 0,
-      color: Colors.white,
+      color: cardColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: dark ? const Color(0xFF16213E) : AppColors.blue,
+      foregroundColor: Colors.white,
     ),
     // Botones en forma de píldora
     filledButtonTheme: FilledButtonThemeData(
@@ -75,16 +106,16 @@ ThemeData buildTheme() {
     // Campos de texto ovalados
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: cardColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.field)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.field),
-        borderSide: const BorderSide(color: Color(0xFFD5DAE3)),
+        borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.field),
-        borderSide: const BorderSide(color: AppColors.blue, width: 2),
+        borderSide: BorderSide(color: scheme.primary, width: 2),
       ),
     ),
     chipTheme: const ChipThemeData(shape: StadiumBorder()),
@@ -99,6 +130,7 @@ ThemeData buildTheme() {
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
+      color: dark ? DarkColors.card : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
     ),
     listTileTheme: ListTileThemeData(
@@ -107,6 +139,67 @@ ThemeData buildTheme() {
     navigationDrawerTheme: const NavigationDrawerThemeData(indicatorShape: StadiumBorder()),
     navigationRailTheme: const NavigationRailThemeData(indicatorShape: StadiumBorder()),
   );
+}
+
+/// Modo claro / oscuro de la app. Se guarda en el dispositivo.
+class ThemeController extends ValueNotifier<ThemeMode> {
+  ThemeController() : super(ThemeMode.light);
+
+  static const _key = 'modo_tema';
+
+  bool get isDark => value == ThemeMode.dark;
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      value = prefs.getString(_key) == 'oscuro' ? ThemeMode.dark : ThemeMode.light;
+    } catch (_) {
+      value = ThemeMode.light;
+    }
+  }
+
+  Future<void> toggle() async {
+    value = isDark ? ThemeMode.light : ThemeMode.dark;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, isDark ? 'oscuro' : 'claro');
+    } catch (_) {}
+  }
+}
+
+final themeController = ThemeController();
+
+/// Botón de sol / luna para cambiar entre modo claro y oscuro.
+class ThemeToggleButton extends StatelessWidget {
+  const ThemeToggleButton({super.key, this.color});
+
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
+      builder: (context, mode, _) {
+        final dark = mode == ThemeMode.dark;
+        return IconButton(
+          tooltip: dark ? 'Modo claro' : 'Modo oscuro',
+          color: color,
+          onPressed: themeController.toggle,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, anim) => RotationTransition(
+              turns: Tween<double>(begin: 0.75, end: 1).animate(anim),
+              child: FadeTransition(opacity: anim, child: child),
+            ),
+            child: Icon(
+              dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+              key: ValueKey(dark),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// Estado de una celda del parqueadero -> color y etiqueta.

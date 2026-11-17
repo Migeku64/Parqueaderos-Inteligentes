@@ -8,7 +8,7 @@
       Cuando la API esté publicada en la nube con https, puede cambiarlo a "false".
     -->
     <application
-        android:label="Parqueadero"
+        android:label="Nueva Castilla Etapa 3 Parking"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

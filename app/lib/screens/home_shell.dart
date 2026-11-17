@@ -88,7 +88,6 @@ class _HomeShellState extends State<HomeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
         titleSpacing: wide ? 16 : 0,
         title: Row(
@@ -99,7 +98,7 @@ class _HomeShellState extends State<HomeShell> {
             ],
             Expanded(
               child: Text(
-                wide ? 'Parqueadero Comunitario' : dest.label,
+                wide ? 'Nueva Castilla Etapa 3 Parking' : dest.label,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
@@ -107,6 +106,7 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
         actions: [
+          const ThemeToggleButton(),
           ListenableBuilder(
             listenable: session,
             builder: (context, _) => IconButton(
@@ -139,7 +139,7 @@ class _HomeShellState extends State<HomeShell> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     Text('${roleLabel(user.role)} · ${user.username}',
                         style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                   ],
@@ -189,17 +189,11 @@ class _HomeShellState extends State<HomeShell> {
       body: wide
           ? Row(
               children: [
-                NavigationRail(
+                _SideMenu(
+                  dests: _dests,
+                  selected: _index,
                   extended: MediaQuery.of(context).size.width >= 1200,
-                  selectedIndex: _index,
-                  onDestinationSelected: _go,
-                  labelType: MediaQuery.of(context).size.width >= 1200
-                      ? NavigationRailLabelType.none
-                      : NavigationRailLabelType.all,
-                  destinations: [
-                    for (final d in _dests)
-                      NavigationRailDestination(icon: Icon(d.icon), label: Text(d.label)),
-                  ],
+                  onSelect: _go,
                 ),
                 const VerticalDivider(width: 1),
                 Expanded(child: body),
@@ -215,6 +209,138 @@ class _HomeShellState extends State<HomeShell> {
               ],
             )
           : null,
+    );
+  }
+}
+
+/// Menú lateral (pantallas anchas): cada opción cambia de color al pasar el cursor
+/// y la opción activa se resalta con una píldora de color.
+class _SideMenu extends StatelessWidget {
+  const _SideMenu({required this.dests, required this.selected, required this.extended, required this.onSelect});
+
+  final List<_Dest> dests;
+  final int selected;
+  final bool extended;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: extended ? 260 : 104,
+      color: Theme.of(context).colorScheme.surface,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          for (var i = 0; i < dests.length; i++)
+            _SideItem(
+              dest: dests[i],
+              selected: i == selected,
+              extended: extended,
+              onTap: () => onSelect(i),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SideItem extends StatefulWidget {
+  const _SideItem({required this.dest, required this.selected, required this.extended, required this.onTap});
+
+  final _Dest dest;
+  final bool selected;
+  final bool extended;
+  final VoidCallback onTap;
+
+  @override
+  State<_SideItem> createState() => _SideItemState();
+}
+
+class _SideItemState extends State<_SideItem> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sel = widget.selected;
+    final bg = sel
+        ? cs.primary
+        : _hover
+            ? cs.primary.withAlpha(36)
+            : Colors.transparent;
+    final fg = sel
+        ? cs.onPrimary
+        : _hover
+            ? cs.primary
+            : cs.onSurfaceVariant;
+    final weight = sel || _hover ? FontWeight.w700 : FontWeight.w500;
+    const duration = Duration(milliseconds: 180);
+
+    final icon = AnimatedScale(
+      scale: _hover && !sel ? 1.12 : 1,
+      duration: duration,
+      child: Icon(widget.dest.icon, color: fg),
+    );
+    final Widget content = widget.extended
+        ? Row(
+            children: [
+              icon,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  widget.dest.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontWeight: weight),
+                ),
+              ),
+            ],
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              const SizedBox(height: 4),
+              Text(
+                widget.dest.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontWeight: weight, fontSize: 11),
+              ),
+            ],
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(widget.extended ? 999 : 22),
+          boxShadow: sel
+              ? [BoxShadow(color: cs.primary.withAlpha(70), blurRadius: 12, offset: const Offset(0, 4))]
+              : const [],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(widget.extended ? 999 : 22),
+            hoverColor: Colors.transparent,
+            splashColor: cs.primary.withAlpha(50),
+            onHover: (h) => setState(() => _hover = h),
+            onTap: widget.onTap,
+            child: AnimatedPadding(
+              duration: duration,
+              curve: Curves.easeOut,
+              padding: widget.extended
+                  ? EdgeInsets.fromLTRB(_hover && !sel ? 24 : 18, 13, 16, 13)
+                  : const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: content,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

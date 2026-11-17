@@ -232,7 +232,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   Expanded(
                     child: Card(
                       elevation: 0,
-                      color: Colors.white,
                       margin: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: SingleChildScrollView(
                         child: SingleChildScrollView(

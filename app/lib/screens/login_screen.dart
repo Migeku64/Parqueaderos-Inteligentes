@@ -116,11 +116,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.blue, AppColors.blueLight],
+            colors: Theme.of(context).brightness == Brightness.dark
+                ? const [Color(0xFF0B1226), Color(0xFF1B2F66)]
+                : const [AppColors.blue, AppColors.blueLight],
           ),
         ),
         child: SafeArea(
@@ -142,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Parqueadero Comunitario',
+                          'Nueva Castilla Etapa 3 Parking',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white70),
                         ),
@@ -217,10 +219,16 @@ class _LoginScreenState extends State<LoginScreen> {
               Positioned(
                 top: 4,
                 right: 4,
-                child: IconButton(
-                  tooltip: 'Configurar servidor',
-                  icon: const Icon(Icons.settings, color: Colors.white),
-                  onPressed: _serverDialog,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ThemeToggleButton(color: Colors.white),
+                    IconButton(
+                      tooltip: 'Configurar servidor',
+                      icon: const Icon(Icons.settings, color: Colors.white),
+                      onPressed: _serverDialog,
+                    ),
+                  ],
                 ),
               ),
             ],

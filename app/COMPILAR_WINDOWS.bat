@@ -1,5 +1,5 @@
 @echo off
-title Compilar app Parqueadero (Windows)
+title Compilar Nueva Castilla Etapa 3 Parking (Windows)
 cd /d "%~dp0"
 
 where flutter >nul 2>nul
@@ -15,8 +15,8 @@ if not exist "windows\CMakeLists.txt" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\configurar_plataformas.ps1"
 )
 
-rem Titulo de la ventana de Windows
-powershell -NoProfile -Command "$f='windows\runner\main.cpp'; if (Test-Path $f) { (Get-Content $f -Raw) -replace 'L\"parqueadero_app\"','L\"Parqueadero Comunitario\"' | Set-Content $f -NoNewline }"
+rem Nombre de la app en Windows (titulo de la ventana y del programa)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\nombre_windows.ps1"
 
 echo.
 echo === Compilando la app para Windows (puede tardar unos minutos) ===

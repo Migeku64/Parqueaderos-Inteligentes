@@ -95,7 +95,6 @@ class _UsersScreenState extends State<UsersScreen> {
     final role = asStr(u['role']);
     return Card(
       elevation: 0,
-      color: Colors.white,
       margin: const EdgeInsets.symmetric(vertical: 3),
       child: ListTile(
         leading: CircleAvatar(

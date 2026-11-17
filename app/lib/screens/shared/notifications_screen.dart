@@ -30,7 +30,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notificaciones'),
-        backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
         actions: [
           TextButton(
@@ -61,7 +60,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 final kind = asStr(n['kind']);
                 return Card(
                   elevation: 0,
-                  color: unread ? const Color(0xFFEAF0FF) : Colors.white,
+                  color: unread ? Theme.of(context).colorScheme.primary.withAlpha(28) : Theme.of(context).cardColor,
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: ListTile(
                     leading: Icon(_icon(kind), color: kind == 'alerta' ? AppColors.red : AppColors.blue),

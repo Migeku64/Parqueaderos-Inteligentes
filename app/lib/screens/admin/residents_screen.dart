@@ -107,7 +107,6 @@ class _ResidentTile extends StatelessWidget {
     ];
     return Card(
       elevation: 0,
-      color: Colors.white,
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tile)),
       child: ListTile(
@@ -120,7 +119,7 @@ class _ResidentTile extends StatelessWidget {
           ),
         ),
         title: Text('${asStr(r['full_name'])} · Casa ${asStr(r['house'])}',
-            style: TextStyle(color: inactive ? AppColors.muted : AppColors.text, fontWeight: FontWeight.w600)),
+            style: TextStyle(color: inactive ? AppColors.muted : null, fontWeight: FontWeight.w600)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Wrap(
@@ -160,7 +159,6 @@ class _ResidentDetailScreenState extends State<ResidentDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Residente'),
-        backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
       ),
       body: Loader<Map<String, dynamic>>(

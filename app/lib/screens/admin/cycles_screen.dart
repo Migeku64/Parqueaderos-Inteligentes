@@ -314,7 +314,7 @@ class CycleDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Asignaciones del ciclo'), backgroundColor: AppColors.blue, foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('Asignaciones del ciclo'), foregroundColor: Colors.white),
       body: Loader<Map<String, dynamic>>(
         load: () async => asMap(await session.api.get('/cycles/$cycleId')),
         reloadOn: const {'assignments'},
@@ -331,7 +331,6 @@ class CycleDetailScreen extends StatelessWidget {
                 for (final a in list)
                   Card(
                     elevation: 0,
-                    color: Colors.white,
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: ListTile(
                       leading: CircleAvatar(
@@ -442,7 +441,6 @@ class _DrawScreenState extends State<DrawScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Sorteo · ${asStr(widget.cycle['name'])}'),
-        backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
       ),
       body: MaxWidth(
