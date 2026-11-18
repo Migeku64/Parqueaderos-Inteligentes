@@ -1,10 +1,12 @@
 // Ciclos (RF17), sorteo y asignación (RF03, UC-04), historial (RF10, UC-09).
 import { sql } from '../db.js';
+import { config } from '../config.js';
 import { badRequest, conflict, notFound, required, intParam, isDate } from '../http.js';
 import { ADMIN, STAFF } from '../auth.js';
 import { audit, notify } from '../events.js';
 import { broadcast } from '../ws.js';
-import { previewDraw, confirmDraw, getCycle, evaluateResidents } from '../services/draw.js';
+import { previewDraw, getCycle, evaluateResidents } from '../services/draw.js';
+import { runDraw, runScheduledDraws } from '../services/drawRunner.js';
 import { spotsChanged } from './spots.js';
 
 const MIN_DAYS = 28; // ~1 mes de margen; el reglamento habla de 2 a 6 meses
@@ -51,14 +53,15 @@ export default function cycleRoutes(r) {
         AND daterange(fecha_inicio, fecha_fin) && daterange(${b.start_date}::date, ${b.end_date}::date)`;
     if (overlap) throw conflict(`Las fechas se cruzan con el ciclo "${overlap.name}"`);
     const [c] = await sql`
-      INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo)
-      VALUES (${b.name}, ${b.start_date}, ${b.end_date}, ${b.draw_date || null}) RETURNING *`;
+      INSERT INTO ciclo (nombre, fecha_inicio, fecha_fin, fecha_sorteo, sorteo_automatico)
+      VALUES (${b.name}, ${b.start_date}, ${b.end_date}, ${b.draw_date || null}, ${Boolean(b.auto_draw && b.draw_date)})
+      RETURNING *`;
     await audit(null, ctx.user.id, 'crear_ciclo', 'ciclo', c.id, b);
     if (c.draw_date) {
       await notify({
         role: 'residente',
         title: 'Nuevo sorteo programado',
-        body: `El sorteo del ciclo "${c.name}" será el ${c.draw_date}. Recuerde estar al día con la administración.`,
+        body: `El sorteo del ciclo "${c.name}" será el ${c.draw_date}${c.auto_draw ? ` a las ${config.autoDrawHour}:00` : ''}. Recuerde estar al día con la administración.`,
         kind: 'sorteo',
       });
     }
@@ -74,9 +77,12 @@ export default function cycleRoutes(r) {
     const start = b.start_date ?? c.start_date;
     const end = b.end_date ?? c.end_date;
     validateDates(start, end);
+    const drawDate = b.draw_date !== undefined ? b.draw_date || null : c.draw_date;
+    if (drawDate && !isDate(drawDate)) throw badRequest('Fecha de sorteo inválida');
+    const autoDraw = Boolean((b.auto_draw !== undefined ? b.auto_draw : c.auto_draw) && drawDate);
     const [u] = await sql`
       UPDATE ciclo SET nombre = ${b.name ?? c.name}, fecha_inicio = ${start}, fecha_fin = ${end},
-             fecha_sorteo = ${b.draw_date !== undefined ? b.draw_date || null : c.draw_date}
+             fecha_sorteo = ${drawDate}, sorteo_automatico = ${autoDraw}
       WHERE id = ${id} RETURNING *`;
     await audit(null, ctx.user.id, 'editar_ciclo', 'ciclo', id, b);
     return u;
@@ -139,44 +145,11 @@ export default function cycleRoutes(r) {
     return previewDraw(intParam(ctx.params.id), ctx.body.mode || 'ponderado');
   });
 
-  // Ejecuta/confirma el sorteo y guarda las asignaciones
+  // Sorteo real: guarda las asignaciones y notifica a los residentes
   r.post('/cycles/:id/draw', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
-    const result = await sql.begin(async (tx) => {
-      const res = await confirmDraw(tx, id, { mode: ctx.body.mode, proposal: ctx.body.proposal });
-      await audit(tx, ctx.user.id, 'sorteo', 'ciclo', id, {
-        modo: res.mode,
-        asignados: res.assigned.length,
-        lista_espera: res.waitlist.length,
-        resultado: res.assigned.map((a) => ({ residente: a.full_name, celda: a.spot_code, ipa: a.ipa })),
-      });
-      for (const a of res.assigned) {
-        await notify(
-          {
-            residentIds: [a.resident_id],
-            title: '¡Resultado del sorteo: le fue asignada una celda!',
-            body: `Celda ${a.spot_code} para el vehículo ${a.plate} en el ciclo "${res.cycle.name}" (${res.cycle.start_date} a ${res.cycle.end_date}).`,
-            kind: 'sorteo',
-          },
-          tx,
-        );
-      }
-      if (res.waitlist.length) {
-        await notify(
-          {
-            residentIds: res.waitlist.map((w) => w.resident_id),
-            title: 'Resultado del sorteo: lista de espera',
-            body: `En el ciclo "${res.cycle.name}" no alcanzó celda. Su tiempo de espera aumentará su prioridad en el próximo sorteo.`,
-            kind: 'sorteo',
-          },
-          tx,
-        );
-      }
-      return res;
-    });
+    const result = await runDraw({ cycleId: id, mode: ctx.body.mode, proposal: ctx.body.proposal, userId: ctx.user.id });
     ctx.status = 201;
-    broadcast('assignments', { cycle_id: id });
-    spotsChanged();
     return {
       cycle: result.cycle,
       mode: result.mode,
@@ -184,6 +157,9 @@ export default function cycleRoutes(r) {
       waitlist: result.waitlist.map((w) => ({ resident_id: w.resident_id, full_name: w.full_name, house: w.house, ipa: w.ipa })),
     };
   });
+
+  // Revisa ya mismo si hay sorteos automáticos pendientes (útil para pruebas y demostraciones)
+  r.post('/cycles/draws/run-scheduled', ADMIN, async () => ({ done: await runScheduledDraws() }));
 
   // ---------- Asignación manual / cancelación ----------
   r.post('/assignments', ADMIN, async (ctx) => {

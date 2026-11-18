@@ -1,0 +1,25 @@
+# Despierta la API en Render todos los días a las 8:05 a. m. (hora de Colombia).
+# En el plan gratuito Render apaga la API cuando nadie la usa; al despertarla,
+# la API revisa si hay un sorteo automático programado para ese día y lo realiza.
+name: Despertar API (sorteo automático)
+
+on:
+  schedule:
+    - cron: '5 13 * * *'   # 13:05 UTC = 8:05 a. m. en Colombia
+  workflow_dispatch:
+
+jobs:
+  despertar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar a la API
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 90 https://parqueadero-api-ynr1.onrender.com/health; then
+              echo; echo "API despierta"; break
+            fi
+            echo "Intento $i sin respuesta, reintentando..."; sleep 20
+          done
+          # Se mantiene activa un momento para que alcance a revisar los sorteos programados
+          sleep 60
+          curl -fsS --max-time 60 https://parqueadero-api-ynr1.onrender.com/health || true

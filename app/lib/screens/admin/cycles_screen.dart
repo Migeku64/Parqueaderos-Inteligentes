@@ -122,6 +122,16 @@ class _CycleCard extends StatelessWidget {
           Text('Del ${fmtDate(cycle['start_date'])} al ${fmtDate(cycle['end_date'])}'
               '${cycle['draw_date'] != null ? ' · Sorteo: ${fmtDate(cycle['draw_date'])}' : ''}'),
           Text('${asInt(cycle['assignments'])} asignaciones', style: const TextStyle(color: AppColors.muted)),
+          if (status == 'planeado' && asBool(cycle['auto_draw']) && cycle['draw_done_at'] == null && cycle['draw_date'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Pill('Sorteo automático: ${fmtDate(cycle['draw_date'])} · 8:00 a. m.', color: AppColors.blue),
+            ),
+          if (cycle['draw_done_at'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Pill('Sorteo realizado', color: AppColors.green),
+            ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -222,6 +232,7 @@ Future<bool> showCycleForm(BuildContext context,
   }
   DateTime end = existing != null ? (parseDate(existing['end_date']) ?? _addMonths(start, 4)) : _addMonths(start, 4);
   DateTime? draw = existing != null ? parseDate(existing['draw_date']) : start.subtract(const Duration(days: 7));
+  bool autoDraw = existing != null ? asBool(existing['auto_draw']) : true;
   final name = TextEditingController(
       text: existing != null ? asStr(existing['name']) : 'Ciclo ${start.year}-${two(start.month)}');
   String? error;
@@ -264,6 +275,16 @@ Future<bool> showCycleForm(BuildContext context,
                   ],
                 ),
                 dateRow('Fecha del sorteo', draw, (d) => draw = d),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.schedule),
+                  title: const Text('Sorteo automático'),
+                  subtitle: Text(draw == null
+                      ? 'Defina primero la fecha del sorteo'
+                      : 'El sorteo real se hará solo el ${fmtLongDate(isoDate(draw!))} a las 8:00 a. m.'),
+                  value: autoDraw && draw != null,
+                  onChanged: draw == null ? null : (v) => setState(() => autoDraw = v),
+                ),
                 if (error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -281,6 +302,7 @@ Future<bool> showCycleForm(BuildContext context,
                   'start_date': isoDate(start),
                   'end_date': isoDate(end),
                   'draw_date': draw == null ? null : isoDate(draw!),
+                  'auto_draw': autoDraw && draw != null,
                 };
                 try {
                   if (existing == null) {
@@ -371,7 +393,7 @@ class CycleDetailScreen extends StatelessWidget {
   }
 }
 
-/// Sorteo: simular, revisar (y ajustar) y confirmar (UC-04).
+/// Sorteo: demo (simulación que no guarda nada) y sorteo real (UC-04).
 class DrawScreen extends StatefulWidget {
   const DrawScreen({super.key, required this.cycle});
 
@@ -408,9 +430,10 @@ class _DrawScreenState extends State<DrawScreen> {
     if (_proposal.isEmpty) return;
     final ok = await confirm(
       context,
-      'Confirmar sorteo',
-      'Se guardarán ${_proposal.length} asignaciones y se notificará a los residentes. ¿Continuar?',
-      ok: 'Confirmar',
+      'Hacer sorteo real',
+      'Se guardarán ${_proposal.length} asignaciones y se notificará a los residentes. '
+          'Este resultado ya no es una demo. ¿Continuar?',
+      ok: 'Hacer sorteo real',
     );
     if (!ok || !mounted) return;
     setState(() => _busy = true);
@@ -422,7 +445,7 @@ class _DrawScreenState extends State<DrawScreen> {
           for (final p in _proposal) {'resident_id': p['resident_id'], 'parking_spot_id': p['parking_spot_id']}
         ],
       }),
-      success: 'Sorteo guardado',
+      success: 'Sorteo real guardado',
     );
     if (!mounted) return;
     setState(() {
@@ -468,17 +491,26 @@ class _DrawScreenState extends State<DrawScreen> {
                       FilledButton.icon(
                         onPressed: _busy ? null : _simulate,
                         icon: const Icon(Icons.play_circle_outline),
-                        label: Text(preview == null ? 'Simular sorteo' : 'Volver a sortear'),
+                        label: Text(preview == null ? 'Hacer demo' : 'Repetir demo'),
                       ),
                       if (preview != null)
                         FilledButton.icon(
                           style: FilledButton.styleFrom(backgroundColor: AppColors.green),
                           onPressed: _busy || _proposal.isEmpty ? null : _confirm,
                           icon: const Icon(Icons.check_circle_outline),
-                          label: Text('Confirmar ${_proposal.length} asignaciones'),
+                          label: Text('Hacer sorteo real (${_proposal.length} asignaciones)'),
                         ),
                     ],
                   ),
+                  if (asBool(widget.cycle['auto_draw']) && widget.cycle['draw_date'] != null && widget.cycle['draw_done_at'] == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        'Este ciclo tiene sorteo automático el ${fmtLongDate(widget.cycle['draw_date'])} a las 8:00 a. m. '
+                        'Si hace el sorteo real antes, el automático ya no se ejecuta.',
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                    ),
                   if (_busy) const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
                 ],
               ),
@@ -486,7 +518,32 @@ class _DrawScreenState extends State<DrawScreen> {
             if (preview == null && result == null)
               const EmptyView(
                 icon: Icons.casino_outlined,
-                message: 'Pulse "Simular sorteo" para ver la propuesta. Nada se guarda hasta que la confirme.',
+                message: 'Pulse "Hacer demo" para ver un sorteo de prueba. Nada se guarda hasta que pulse "Hacer sorteo real".',
+              ),
+            if (preview != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.amberSoft,
+                    borderRadius: BorderRadius.circular(AppRadius.tile),
+                    border: Border.all(color: AppColors.amber),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.science_outlined, color: AppColors.amber),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'DEMO: este resultado es una simulación y no se ha guardado. '
+                          'Puede repetirla las veces que quiera.',
+                          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             if (preview != null) ..._previewWidgets(preview),
             if (result != null) ..._resultWidgets(result),

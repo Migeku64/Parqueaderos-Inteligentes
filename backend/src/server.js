@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { sql } from './db.js';
 import { runBackup } from './services/backup.js';
 import { notify } from './events.js';
+import { runScheduledDraws } from './services/drawRunner.js';
 
 const server = createServer();
 
@@ -58,6 +59,17 @@ async function cycleReminders() {
 }
 setTimeout(cycleReminders, 10_000).unref();
 setInterval(cycleReminders, 6 * HOUR).unref();
+
+// Sorteo automático en la fecha programada (se revisa al iniciar y cada 15 minutos)
+async function scheduledDraws() {
+  try {
+    await runScheduledDraws();
+  } catch (err) {
+    console.error('[sorteo automático]', err.message);
+  }
+}
+setTimeout(scheduledDraws, 15_000).unref();
+setInterval(scheduledDraws, 15 * 60_000).unref();
 
 async function shutdown() {
   console.log('Cerrando servidor...');

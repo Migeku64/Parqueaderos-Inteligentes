@@ -171,6 +171,9 @@ CREATE TABLE IF NOT EXISTS notificacion (
 );
 -- Bases creadas antes de las notificaciones por correo
 ALTER TABLE notificacion ADD COLUMN IF NOT EXISTS correo_enviado_en TIMESTAMPTZ;
+-- Sorteo automático: si está activo, el sorteo real se hace solo en la fecha programada
+ALTER TABLE ciclo ADD COLUMN IF NOT EXISTS sorteo_automatico   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE ciclo ADD COLUMN IF NOT EXISTS sorteo_ejecutado_en TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS notificacion_usuario_idx ON notificacion(cuenta_usuario_id, creado_en DESC);
 
 -- ---------------------------------------------------------------------

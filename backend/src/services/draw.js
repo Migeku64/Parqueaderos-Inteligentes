@@ -293,5 +293,7 @@ export async function confirmDraw(tx, cycleId, { mode = 'ponderado', proposal } 
   if (!cycle.draw_date) {
     await tx`UPDATE ciclo SET fecha_sorteo = CURRENT_DATE WHERE id = ${cycle.id}`;
   }
+  // Marca el sorteo como hecho para que el sorteo automático no lo repita
+  await tx`UPDATE ciclo SET sorteo_ejecutado_en = now() WHERE id = ${cycle.id}`;
   return { cycle, mode, assigned: inserted, waitlist, excluded_count: excluded.length };
 }

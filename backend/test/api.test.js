@@ -313,6 +313,39 @@ test('ciclos: validación de fechas, cierre y activación', async () => {
   assert.equal(act.data.status, 'activo');
 });
 
+test('sorteo automático en la fecha programada (una sola vez)', async () => {
+  const hace2dias = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  // Ciclo con sorteo automático cuya fecha ya pasó
+  const auto = await api('POST', '/cycles', {
+    name: 'Auto 2030', start_date: '2030-02-01', end_date: '2030-05-01', draw_date: hace2dias, auto_draw: true,
+  });
+  assert.equal(auto.status, 201, JSON.stringify(auto.data));
+  assert.equal(auto.data.auto_draw, true);
+  // Ciclo sin sorteo automático: no se debe sortear solo
+  const manual = await api('POST', '/cycles', {
+    name: 'Manual 2030', start_date: '2030-06-01', end_date: '2030-09-01', draw_date: hace2dias,
+  });
+  assert.equal(manual.data.auto_draw, false);
+  // Sin fecha de sorteo el sorteo automático no queda activo
+  const sinFecha = await api('PATCH', `/cycles/${manual.data.id}`, { draw_date: null, auto_draw: true });
+  assert.equal(sinFecha.data.auto_draw, false);
+
+  const run = await api('POST', '/cycles/draws/run-scheduled', {});
+  assert.equal(run.status, 200, JSON.stringify(run.data));
+  assert.deepEqual(run.data.done.map((d) => d.cycle_id), [auto.data.id]);
+
+  const detalle = await api('GET', `/cycles/${auto.data.id}`);
+  assert.ok(detalle.data.draw_done_at, 'debe quedar marcado como sorteado');
+  assert.equal(detalle.data.assignment_list.length, run.data.done[0].assigned);
+
+  // Segunda revisión: no repite el sorteo
+  const again = await api('POST', '/cycles/draws/run-scheduled', {});
+  assert.deepEqual(again.data.done, []);
+
+  const aud = await api('GET', '/audit?action=sorteo_automatico');
+  assert.ok(aud.data.some((a) => a.entity_id === auto.data.id));
+});
+
 test('WebSocket en tiempo real recibe eventos', { skip: typeof WebSocket === 'undefined' && 'requiere Node 22+' }, async () => {
   const ws = new WebSocket(`${base.replace('http', 'ws')}/ws?token=${tokens.guarda}`);
   const events = [];

@@ -53,6 +53,8 @@ export const COLUMNS = {
   start_date: 'fecha_inicio',
   end_date: 'fecha_fin',
   draw_date: 'fecha_sorteo',
+  auto_draw: 'sorteo_automatico',
+  draw_done_at: 'sorteo_ejecutado_en',
   cycle_id: 'ciclo_id',
   vehicle_id: 'vehiculo_id',
   parking_spot_id: 'celda_id',

@@ -47,6 +47,9 @@ export const config = {
   houseMin: Number(env.HOUSE_MIN || 1),
   houseMax: Number(env.HOUSE_MAX || 300),
   maxFailedLogins: Number(env.MAX_FAILED_LOGINS || 5),
+  // Sorteo automático: hora del día (hora de Colombia) en la que se hace el sorteo programado
+  autoDrawHour: Number(env.AUTO_DRAW_HOUR ?? 8),
+  timezone: env.TIMEZONE || 'America/Bogota',
   isTest: env.NODE_ENV === 'test',
 };
 
