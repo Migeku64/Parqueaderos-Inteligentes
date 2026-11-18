@@ -114,6 +114,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // El logo se ajusta a la altura de la ventana para que todo quepa sin barra de desplazamiento
+    final alto = MediaQuery.of(context).size.height;
+    final logo = (alto * 0.21).clamp(120.0, 200.0);
+    final compacto = alto < 760;
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -129,14 +134,17 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Stack(
             children: [
               Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
+                // Sin barra de desplazamiento visible (se puede seguir usando la rueda del mouse)
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: compacto ? 12 : 24),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: Column(
                       children: [
-                        const BrandLogo(size: 230, full: true),
-                        const SizedBox(height: 24),
+                        BrandLogo(size: logo, full: true),
+                        SizedBox(height: compacto ? 12 : 20),
                         const Text(
                           'BIENVENIDO',
                           style: TextStyle(
@@ -148,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white70),
                         ),
-                        const SizedBox(height: 28),
+                        SizedBox(height: compacto ? 16 : 24),
                         _label('USUARIO'),
                         TextField(
                           controller: _user,
@@ -156,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           autocorrect: false,
                           decoration: inputDeco('Usuario', icon: Icons.person_outline),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: compacto ? 10 : 14),
                         _label('CONTRASEÑA'),
                         TextField(
                           controller: _pass,
@@ -169,8 +177,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _forgot,
+                            child: const Text(
+                              '¿Olvidó su contraseña?',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
                         if (_error != null) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 4),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -179,13 +202,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(_error!, style: const TextStyle(color: AppColors.red)),
                           ),
                         ],
-                        const SizedBox(height: 24),
+                        SizedBox(height: compacto ? 10 : 14),
                         SizedBox(
                           width: double.infinity,
                           height: 52,
                           child: FilledButton(
                             style: FilledButton.styleFrom(
-                              backgroundColor: Colors.black,
+                              // En modo oscuro el botón es azul para que no se pierda en el fondo
+                              backgroundColor: dark ? DarkColors.primary : Colors.black,
                               shape: const StadiumBorder(),
                             ),
                             onPressed: _busy ? null : _login,
@@ -198,12 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _forgot,
-                          child: const Text('¿Olvidó su contraseña?', style: TextStyle(color: Colors.white)),
-                        ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 14),
                         ListenableBuilder(
                           listenable: session,
                           builder: (context, _) => Text(
@@ -214,6 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
+                ),
                 ),
               ),
               Positioned(
