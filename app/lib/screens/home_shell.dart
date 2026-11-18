@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
+import '../core/navigation.dart';
 import '../core/session.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
@@ -38,6 +39,9 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   late final List<_Dest> _dests;
 
+  /// Filtro con el que se abre la sección actual cuando se llega desde el panel
+  String? _navFilter;
+
   @override
   void initState() {
     super.initState();
@@ -45,11 +49,11 @@ class _HomeShellState extends State<HomeShell> {
     if (user.isAdmin) {
       _dests = [
         _Dest('Inicio', Icons.dashboard_outlined, () => const DashboardScreen()),
-        _Dest('Mapa', Icons.grid_view, () => const SpotsMapScreen()),
+        _Dest('Mapa', Icons.grid_view, () => SpotsMapScreen(initialFilter: _navFilter)),
         _Dest('Residentes', Icons.people_outline, () => const ResidentsScreen()),
         _Dest('Ciclos y sorteos', Icons.casino_outlined, () => const CyclesScreen()),
         _Dest('Control de acceso', Icons.qr_code_scanner, () => const AccessControlScreen()),
-        _Dest('Movimientos', Icons.swap_vert, () => const MovementsScreen()),
+        _Dest('Movimientos', Icons.swap_vert, () => MovementsScreen(initialFilter: _navFilter)),
         _Dest('Reportes', Icons.bar_chart, () => const ReportsScreen()),
         _Dest('Usuarios', Icons.manage_accounts_outlined, () => const UsersScreen()),
         _Dest('Auditoría y respaldos', Icons.history, () => const AuditScreen()),
@@ -68,6 +72,7 @@ class _HomeShellState extends State<HomeShell> {
         _Dest('Ayuda', Icons.help_outline, () => const HelpScreen()),
       ];
     }
+    shellNav.addListener(_onNav);
     if (user.mustChangePassword) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) showChangePasswordDialog(context, forced: true);
@@ -75,7 +80,29 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  void _go(int i) => setState(() => _index = i);
+  @override
+  void dispose() {
+    shellNav.removeListener(_onNav);
+    super.dispose();
+  }
+
+  void _go(int i) => setState(() {
+        _index = i;
+        _navFilter = null;
+      });
+
+  /// Atiende los pedidos de navegación (por ejemplo, al tocar una tarjeta del panel)
+  void _onNav() {
+    final req = shellNav.value;
+    if (req == null) return;
+    shellNav.value = null;
+    final i = _dests.indexWhere((d) => d.label == req.section);
+    if (i < 0 || !mounted) return;
+    setState(() {
+      _index = i;
+      _navFilter = req.filter;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +111,7 @@ class _HomeShellState extends State<HomeShell> {
     final dest = _dests[_index];
     final useDrawer = !wide && _dests.length > 5;
 
-    final body = KeyedSubtree(key: ValueKey(_index), child: dest.builder());
+    final body = KeyedSubtree(key: ValueKey('$_index-$_navFilter'), child: dest.builder());
 
     return Scaffold(
       appBar: AppBar(

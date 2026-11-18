@@ -172,7 +172,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-class StatCard extends StatelessWidget {
+class StatCard extends StatefulWidget {
   const StatCard({
     super.key,
     required this.label,
@@ -180,6 +180,8 @@ class StatCard extends StatelessWidget {
     required this.icon,
     this.color = AppColors.blue,
     this.footnote,
+    this.onTap,
+    this.tooltip,
   });
 
   final String label;
@@ -188,42 +190,93 @@ class StatCard extends StatelessWidget {
   final Color color;
   final String? footnote;
 
+  /// Si se indica, la tarjeta se puede tocar (por ejemplo, para abrir el mapa)
+  final VoidCallback? onTap;
+  final String? tooltip;
+
+  @override
+  State<StatCard> createState() => _StatCardState();
+}
+
+class _StatCardState extends State<StatCard> {
+  bool _hover = false;
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withAlpha(30), shape: BoxShape.circle),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              // FittedBox reduce el texto si la tarjeta es pequeña, así nunca se desborda
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                    Text(label, style: const TextStyle(color: AppColors.muted)),
-                    if (footnote != null)
-                      Text(footnote!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                  ],
-                ),
+    final w = widget;
+    final active = _hover && w.onTap != null;
+    const duration = Duration(milliseconds: 180);
+    final radius = BorderRadius.circular(AppRadius.card);
+
+    Widget card = AnimatedScale(
+      scale: active ? 1.03 : 1,
+      duration: duration,
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: radius,
+          border: Border.all(color: active ? w.color : Colors.transparent, width: 2),
+          boxShadow: active
+              ? [BoxShadow(color: w.color.withAlpha(70), blurRadius: 16, offset: const Offset(0, 6))]
+              : const [],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: w.onTap,
+            onHover: w.onTap == null ? null : (h) => setState(() => _hover = h),
+            hoverColor: Colors.transparent,
+            splashColor: w.color.withAlpha(40),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: duration,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: w.color.withAlpha(active ? 60 : 30), shape: BoxShape.circle),
+                    child: Icon(w.icon, color: w.color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    // FittedBox reduce el texto si la tarjeta es pequeña, así nunca se desborda
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(w.value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                          Text(w.label, style: const TextStyle(color: AppColors.muted)),
+                          if (w.footnote != null)
+                            Text(w.footnote!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (w.onTap != null)
+                    AnimatedSlide(
+                      offset: active ? const Offset(0.2, 0) : Offset.zero,
+                      duration: duration,
+                      child: Icon(Icons.chevron_right, color: active ? w.color : AppColors.muted),
+                    ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
+    if (w.tooltip != null) {
+      card = Tooltip(message: w.tooltip!, waitDuration: const Duration(milliseconds: 500), child: card);
+    }
+    return card;
   }
 }
 

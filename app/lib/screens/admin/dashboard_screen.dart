@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/format.dart';
+import '../../core/navigation.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
@@ -31,12 +32,16 @@ class DashboardScreen extends StatelessWidget {
             icon: Icons.local_parking,
             color: AppColors.green,
             footnote: 'Ocupación ${asInt(d['occupancy_rate'])}%',
+            tooltip: 'Ver las celdas libres en el mapa',
+            onTap: () => goToSection('Mapa', filter: 'libre'),
           ),
           StatCard(
             label: 'Vehículos dentro',
             value: '${asInt(spots['occupied'])}',
             icon: Icons.directions_car,
             color: AppColors.red,
+            tooltip: 'Ver las celdas ocupadas en el mapa',
+            onTap: () => goToSection('Mapa', filter: 'ocupada'),
           ),
           StatCard(
             label: 'Entradas hoy',
@@ -44,12 +49,16 @@ class DashboardScreen extends StatelessWidget {
             icon: Icons.login,
             color: AppColors.blue,
             footnote: '${asInt(today['exits'])} salidas',
+            tooltip: 'Ver las entradas y salidas de hoy',
+            onTap: () => goToSection('Movimientos', filter: 'todos'),
           ),
           StatCard(
             label: 'Ingresos rechazados hoy',
             value: '${asInt(today['rejected'])}',
             icon: Icons.gpp_bad_outlined,
             color: AppColors.amber,
+            tooltip: 'Ver los ingresos rechazados de hoy',
+            onTap: () => goToSection('Movimientos', filter: 'rechazados'),
           ),
         ];
 
@@ -71,6 +80,11 @@ class DashboardScreen extends StatelessWidget {
               ),
               SectionCard(
                 title: 'Ciclo actual',
+                trailing: TextButton.icon(
+                  onPressed: () => goToSection('Ciclos y sorteos'),
+                  icon: const Icon(Icons.casino_outlined, size: 18),
+                  label: const Text('Ver ciclos'),
+                ),
                 child: active == null
                     ? const Text('No hay un ciclo activo. Cree y active uno en "Ciclos y sorteos".')
                     : Column(
@@ -109,6 +123,11 @@ class DashboardScreen extends StatelessWidget {
               ),
               SectionCard(
                 title: 'Últimos movimientos',
+                trailing: TextButton.icon(
+                  onPressed: () => goToSection('Movimientos'),
+                  icon: const Icon(Icons.swap_vert, size: 18),
+                  label: const Text('Ver todos'),
+                ),
                 padding: 8,
                 child: recent.isEmpty
                     ? const Padding(padding: EdgeInsets.all(12), child: Text('Sin movimientos registrados'))

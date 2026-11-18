@@ -8,14 +8,17 @@ import '../admin/residents_screen.dart' show pickResident;
 
 /// Mapa de parqueaderos con disponibilidad en tiempo real (RF04, RF16).
 class SpotsMapScreen extends StatefulWidget {
-  const SpotsMapScreen({super.key});
+  const SpotsMapScreen({super.key, this.initialFilter});
+
+  /// Estado con el que se abre el mapa: libre, asignada, ocupada o inactiva
+  final String? initialFilter;
 
   @override
   State<SpotsMapScreen> createState() => _SpotsMapScreenState();
 }
 
 class _SpotsMapScreenState extends State<SpotsMapScreen> {
-  String _filter = 'todas';
+  late String _filter = widget.initialFilter ?? 'todas';
   String _query = '';
 
   @override

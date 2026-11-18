@@ -7,7 +7,10 @@ import '../guard/access_control_screen.dart' show movementTile;
 
 /// Historial de entradas y salidas con filtros.
 class MovementsScreen extends StatefulWidget {
-  const MovementsScreen({super.key});
+  const MovementsScreen({super.key, this.initialFilter});
+
+  /// Filtro con el que se abre: todos, autorizados o rechazados (siempre del día de hoy)
+  final String? initialFilter;
 
   @override
   State<MovementsScreen> createState() => _MovementsScreenState();
@@ -15,7 +18,7 @@ class MovementsScreen extends StatefulWidget {
 
 class _MovementsScreenState extends State<MovementsScreen> {
   String _plate = '';
-  String _filter = 'todos';
+  late String _filter = widget.initialFilter ?? 'todos';
   DateTime _day = DateTime.now();
   bool _allDays = false;
 
