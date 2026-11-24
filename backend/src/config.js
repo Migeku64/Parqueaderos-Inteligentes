@@ -50,6 +50,20 @@ export const config = {
   // Sorteo automático: hora del día (hora de Colombia) en la que se hace el sorteo programado
   autoDrawHour: Number(env.AUTO_DRAW_HOUR ?? 8),
   timezone: env.TIMEZONE || 'America/Bogota',
+  // Alertas de actividad sospechosa (se notifican a la administración y quedan en la auditoría)
+  alerts: {
+    rejectedCount: Number(env.ALERT_REJECTED_COUNT || 3), // ingresos rechazados de la misma placa...
+    rejectedMinutes: Number(env.ALERT_REJECTED_MINUTES || 30), // ...en estos minutos
+    deletionCount: Number(env.ALERT_DELETION_COUNT || 5), // eliminaciones del mismo usuario...
+    deletionMinutes: Number(env.ALERT_DELETION_MINUTES || 10), // ...en estos minutos
+    nightStart: Number(env.ALERT_NIGHT_START ?? 22), // ingreso de administradores entre estas horas
+    nightEnd: Number(env.ALERT_NIGHT_END ?? 5),
+  },
+  // Informe automático de auditoría: día de la semana (0 = domingo, 1 = lunes; -1 lo desactiva) y hora
+  auditReport: {
+    weekday: Number(env.AUDIT_REPORT_WEEKDAY ?? 1),
+    hour: Number(env.AUDIT_REPORT_HOUR ?? 8),
+  },
   isTest: env.NODE_ENV === 'test',
 };
 

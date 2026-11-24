@@ -7,6 +7,11 @@ export async function audit(tx, userId, action, entityName = null, entityId = nu
   await (tx || sql)`
     INSERT INTO auditoria (cuenta_usuario_id, accion, entidad, entidad_id, detalles)
     VALUES (${userId ?? null}, ${action}, ${entityName}, ${entityId}, ${details ? sql.json(details) : null})`;
+  // Alerta automática si un mismo usuario elimina muchos registros seguidos
+  if (!tx && action.startsWith('eliminar')) {
+    const { checkMassDeletion, runCheck } = await import('./services/alerts.js');
+    await runCheck(checkMassDeletion(userId));
+  }
 }
 
 /**

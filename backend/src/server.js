@@ -4,6 +4,7 @@ import { sql } from './db.js';
 import { runBackup } from './services/backup.js';
 import { notify } from './events.js';
 import { runScheduledDraws } from './services/drawRunner.js';
+import { runScheduledAuditReport } from './services/auditReport.js';
 
 const server = createServer();
 
@@ -70,6 +71,17 @@ async function scheduledDraws() {
 }
 setTimeout(scheduledDraws, 15_000).unref();
 setInterval(scheduledDraws, 15 * 60_000).unref();
+
+// Informe semanal de auditoría para la administración (se revisa al iniciar y cada hora)
+async function auditReport() {
+  try {
+    await runScheduledAuditReport();
+  } catch (err) {
+    console.error('[informe de auditoría]', err.message);
+  }
+}
+setTimeout(auditReport, 30_000).unref();
+setInterval(auditReport, HOUR).unref();
 
 async function shutdown() {
   console.log('Cerrando servidor...');

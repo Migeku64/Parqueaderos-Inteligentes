@@ -453,5 +453,57 @@ test('notificaciones por correo: residentes y administración (Brevo)', async ()
   assert.ok(n > 0, 'quedó registrada la fecha de envío');
 });
 
+test('auditoría automática: alertas, informe semanal y exportación', async () => {
+  const { isNightHour, checkNightAdminLogin } = await import('../src/services/alerts.js');
+  const { runScheduledAuditReport } = await import('../src/services/auditReport.js');
+  const alert = async (tipo) =>
+    (await sql`SELECT count(*)::int AS n FROM auditoria WHERE accion = 'alerta_seguridad' AND detalles->>'tipo' = ${tipo}`)[0].n;
+
+  // 1) Ingresos rechazados repetidos de la misma placa: alerta al llegar a 3
+  for (let i = 0; i < 3; i++) {
+    const m = await api('POST', '/movements', { plate: 'XYZ999', type: 'entrada' }, 'guarda');
+    assert.equal(m.data.authorized, false);
+  }
+  assert.equal(await alert('ingresos_rechazados'), 1);
+  const [n1] = await sql`SELECT count(*)::int AS n FROM notificacion WHERE titulo LIKE 'Alerta de seguridad: ingresos rechazados de la placa XYZ999%'`;
+  assert.ok(n1.n >= 1, 'la administración recibió la alerta');
+
+  // 2) Eliminaciones seguidas del mismo usuario (las pruebas anteriores ya hicieron más de 5)
+  assert.equal(await alert('eliminaciones_seguidas'), 1);
+
+  // 3) Ingreso de un administrador en horario nocturno (hora de Colombia)
+  assert.equal(isNightHour(new Date('2026-01-01T04:00:00Z')), true); // 11:00 p. m.
+  assert.equal(isNightHour(new Date('2026-01-01T15:00:00Z')), false); // 10:00 a. m.
+  const [adm] = await sql`SELECT * FROM cuenta_usuario WHERE usuario = 'admin'`;
+  const nightBefore = await alert('ingreso_nocturno'); // puede haber otras si las pruebas corren de noche
+  assert.equal(await checkNightAdminLogin(adm, new Date('2026-01-01T04:00:00Z')), true);
+  assert.equal(await checkNightAdminLogin(adm, new Date('2026-01-01T15:00:00Z')), false);
+  assert.equal(await alert('ingreso_nocturno'), nightBefore + 1);
+
+  // Resumen e informe de auditoría
+  const sum = await api('GET', '/audit/summary?days=7');
+  assert.ok(sum.data.total > 0);
+  assert.ok(sum.data.items.find((i) => i.key === 'eliminaciones').value > 0);
+  assert.equal((await api('GET', '/audit/summary', null, 'guarda')).status, 403);
+  const rep = await api('POST', '/audit/report', { days: 7 });
+  assert.equal(rep.status, 200);
+  const [n2] = await sql`SELECT count(*)::int AS n FROM notificacion WHERE categoria = 'informe_auditoria'`;
+  assert.ok(n2.n >= 1);
+
+  // Informe semanal automático: una sola vez por semana
+  assert.equal(await runScheduledAuditReport(), true);
+  assert.equal(await runScheduledAuditReport(), false);
+  assert.equal(await runScheduledAuditReport(new Date(Date.now() + 9 * 86_400_000)), true);
+
+  // Exportación de la auditoría a PDF, Excel y CSV
+  for (const [fmt, magic] of [['pdf', '%PDF'], ['xlsx', 'PK'], ['csv', 'Fecha y hora']]) {
+    const res = await fetch(`${base}/audit?format=${fmt}`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
+    assert.equal(res.status, 200, fmt);
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert.ok(buf.subarray(0, 40).toString('utf8').replace(/^\uFEFF/, '').startsWith(magic), fmt);
+  }
+  assert.equal((await api('GET', '/audit?format=doc')).status, 400);
+});
+
 after(() => brevo.close());
 

@@ -2,10 +2,12 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { sql } from '../db.js';
-import { notFound, intParam } from '../http.js';
+import { badRequest, notFound, intParam, toCsv } from '../http.js';
 import { ADMIN, ANY, requireRole } from '../auth.js';
 import { audit } from '../events.js';
 import { runBackup, backupPath } from '../services/backup.js';
+import { toPdf, toXlsx } from '../services/export.js';
+import { auditSummary, sendAuditReport } from '../services/auditReport.js';
 import { evaluateResidents } from '../services/draw.js';
 import { getResident } from './residents.js';
 
@@ -84,17 +86,54 @@ export default function miscRoutes(r) {
   });
 
   // ---------- Auditoría ----------
-  r.get('/audit', ADMIN, async (ctx) => {
-    const q = ctx.query;
-    const limit = Math.min(Number(q.limit) || 200, 1000);
-    return sql`
+  const auditQuery = (q, limit) => sql`
       SELECT a.id, a.accion, a.entidad, a.entidad_id, a.realizado_en, a.detalles, u.usuario
       FROM auditoria a LEFT JOIN cuenta_usuario u ON u.id = a.cuenta_usuario_id
       WHERE (${q.action || null}::text IS NULL OR a.accion = ${q.action || null})
         AND (${q.from || null}::date IS NULL OR a.realizado_en >= ${q.from || null}::date)
         AND (${q.to || null}::date IS NULL OR a.realizado_en < ${q.to || null}::date + 1)
       ORDER BY a.realizado_en DESC, a.id DESC LIMIT ${limit}`;
+
+  // Lista de la auditoría; con ?format=pdf|xlsx|csv se descarga el archivo (RF15, RF19)
+  r.get('/audit', ADMIN, async (ctx) => {
+    const q = ctx.query;
+    if (!q.format) return auditQuery(q, Math.min(Number(q.limit) || 200, 1000));
+    const columns = [
+      { key: 'performed_at', label: 'Fecha y hora' },
+      { key: 'username', label: 'Usuario' },
+      { key: 'action', label: 'Acción' },
+      { key: 'entity', label: 'Entidad' },
+      { key: 'detail', label: 'Detalle' },
+    ];
+    const rows = (await auditQuery(q, 5000)).map((a) => ({
+      performed_at: a.performed_at,
+      username: a.username || 'sistema',
+      action: a.action,
+      entity: [a.entity_name, a.entity_id].filter((v) => v !== null && v !== undefined).join(' '),
+      detail: a.details ? JSON.stringify(a.details).slice(0, 200) : '',
+    }));
+    const title = 'Registro de auditoría';
+    const filters = { from: q.from || null, to: q.to || null };
+    const exporters = {
+      csv: () => [toCsv(rows, columns), 'text/csv; charset=utf-8'],
+      pdf: () => [toPdf({ title, columns, rows, filters }), 'application/pdf'],
+      xlsx: () => [toXlsx({ title, columns, rows, filters }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    };
+    const make = exporters[q.format];
+    if (!make) throw badRequest('Formato inválido (use pdf, xlsx o csv)');
+    const [body, type] = make();
+    await audit(null, ctx.user.id, 'exportar_auditoria', null, null, { formato: q.format, registros: rows.length });
+    const name = `auditoria-${new Date().toISOString().slice(0, 10)}.${q.format}`;
+    ctx.send(200, body, type, { 'Content-Disposition': `attachment; filename="${name}"` });
   });
+
+  // Resumen de la actividad (el mismo del informe semanal)
+  r.get('/audit/summary', ADMIN, async (ctx) => auditSummary(Math.min(Math.max(Number(ctx.query.days) || 7, 1), 90)));
+
+  // Enviar el informe de auditoría ahora (además del envío automático semanal)
+  r.post('/audit/report', ADMIN, async (ctx) =>
+    sendAuditReport({ userId: ctx.user.id, days: Math.min(Math.max(Number(ctx.body.days) || 7, 1), 90) }),
+  );
 
   // ---------- Respaldos ----------
   r.get('/backups', ADMIN, async () => sql`SELECT * FROM respaldo ORDER BY creado_en DESC LIMIT 100`);

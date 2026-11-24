@@ -6,6 +6,7 @@ import { STAFF } from '../auth.js';
 import { audit, notify } from '../events.js';
 import { broadcast } from '../ws.js';
 import { spotsChanged } from './spots.js';
+import { checkRejectedPlate, runCheck } from '../services/alerts.js';
 
 /** Busca el vehículo, su residente y la asignación vigente del ciclo activo. */
 export async function lookupPlate(plate, db = sql) {
@@ -97,6 +98,7 @@ async function registerMovement({ plate: rawPlate, type, userId, source = 'manua
   });
   broadcast('movement', { plate, type, authorized: result.authorized, spot_code: result.spot_code });
   spotsChanged();
+  if (!result.authorized) await runCheck(checkRejectedPlate(plate));
   return result;
 }
 

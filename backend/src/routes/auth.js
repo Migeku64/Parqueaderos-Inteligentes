@@ -4,6 +4,7 @@ import { HttpError, required } from '../http.js';
 import { config } from '../config.js';
 import { ANY, signToken, verifyPassword, hashPassword, validatePassword } from '../auth.js';
 import { audit, notify } from '../events.js';
+import { checkNightAdminLogin, runCheck } from '../services/alerts.js';
 
 const publicUser = (u) => ({
   id: u.id,
@@ -43,6 +44,7 @@ export default function authRoutes(r) {
     }
     await sql`UPDATE cuenta_usuario SET intentos_fallidos = 0, ultimo_ingreso_en = now() WHERE id = ${u.id}`;
     await audit(null, u.id, 'login', 'cuenta_usuario', u.id);
+    await runCheck(checkNightAdminLogin(u));
     return { token: signToken({ sub: u.id, role: u.role }), user: publicUser(u) };
   });
 
