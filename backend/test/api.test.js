@@ -184,6 +184,34 @@ test('mapa de celdas y resumen', async () => {
   assert.equal(bulk.data.created, 3);
 });
 
+test('eliminar celdas: solo las que nunca se han usado', async () => {
+  const z = await api('POST', '/spots/bulk', { prefix: 'Z', from: 1, to: 3 });
+  assert.equal(z.data.created, 3);
+  const all = await api('GET', '/spots');
+  const z01 = all.data.find((s) => s.code === 'Z01');
+  // El guarda no puede eliminar celdas
+  assert.equal((await api('DELETE', `/spots/${z01.id}`, null, 'guarda')).status, 403);
+  const del = await api('DELETE', `/spots/${z01.id}`);
+  assert.equal(del.status, 200);
+  assert.equal((await api('DELETE', `/spots/${z01.id}`)).status, 404);
+  // Una celda con asignaciones (historial) no se elimina: se debe desactivar
+  const used = all.data.find((s) => s.assignment_id);
+  assert.ok(used, 'hay una celda asignada');
+  const blocked = await api('DELETE', `/spots/${used.id}`);
+  assert.equal(blocked.status, 409);
+  // Por rango: elimina Z02 y Z03 y no toca las celdas con historial
+  const range = await api('POST', '/spots/bulk-delete', { prefix: 'Z', from: 1, to: 3 });
+  assert.equal(range.data.deleted, 2);
+  assert.equal(range.data.kept, 0);
+  const [, pre, num] = used.code.match(/^(\D*)(\d+)$/);
+  const keep = await api('POST', '/spots/bulk-delete', { prefix: pre, from: Number(num), to: Number(num) });
+  assert.equal(keep.data.deleted, 0);
+  assert.equal(keep.data.kept, 1, 'la celda usada se conserva');
+  const after = await api('GET', '/spots');
+  assert.ok(after.data.some((s) => s.id === used.id));
+  assert.ok(!after.data.some((s) => s.code.startsWith('Z')));
+});
+
 test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async () => {
   const cyc = await api('GET', '/cycles');
   const active = cyc.data.find((c) => c.status === 'activo');

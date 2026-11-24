@@ -1,6 +1,6 @@
 // Celdas del parqueadero (UC-03), disponibilidad en tiempo real (RF04, RF09, RF16).
 import { sql } from '../db.js';
-import { badRequest, notFound, required, intParam } from '../http.js';
+import { badRequest, conflict, notFound, required, intParam } from '../http.js';
 import { ADMIN, ANY } from '../auth.js';
 import { audit } from '../events.js';
 import { broadcast } from '../ws.js';
@@ -29,6 +29,27 @@ export async function listSpots(db = sql) {
 export function spotsChanged() {
   broadcast('spots', { at: new Date().toISOString() });
 }
+
+// Códigos de un rango: { prefix: "D", from: 1, to: 50 } -> D01..D50
+function rangeCodes(body) {
+  const prefix = String(body.prefix ?? '').trim().toUpperCase();
+  const from = Number(body.from);
+  const to = Number(body.to);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to - from > 500) {
+    throw badRequest('Rango inválido');
+  }
+  const width = String(to).length < 2 ? 2 : String(to).length;
+  const codes = [];
+  for (let i = from; i <= to; i++) codes.push(`${prefix}${String(i).padStart(width, '0')}`);
+  return { prefix, from, to, codes };
+}
+
+// Una celda solo se elimina si nunca se usó: sin asignaciones, sin entradas/salidas y desocupada.
+// Las que tienen historial se desactivan, para no perder los reportes ni la trazabilidad.
+const SIN_HISTORIAL = (sqlRef) => sqlRef`
+  NOT c.ocupada
+  AND NOT EXISTS (SELECT 1 FROM asignacion a WHERE a.celda_id = c.id)
+  AND NOT EXISTS (SELECT 1 FROM movimiento_vehiculo m WHERE m.celda_id = c.id)`;
 
 export default function spotRoutes(r) {
   r.get('/spots', ANY, async (ctx) => {
@@ -71,21 +92,43 @@ export default function spotRoutes(r) {
 
   // Crear varias celdas de una vez: { prefix: "D", from: 1, to: 50 } -> D01..D50
   r.post('/spots/bulk', ADMIN, async (ctx) => {
-    const prefix = String(ctx.body.prefix ?? '').trim().toUpperCase();
-    const from = Number(ctx.body.from);
-    const to = Number(ctx.body.to);
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to - from > 500) {
-      throw badRequest('Rango inválido');
-    }
-    const width = String(to).length < 2 ? 2 : String(to).length;
-    const rows = [];
-    for (let i = from; i <= to; i++) rows.push({ code: `${prefix}${String(i).padStart(width, '0')}` });
+    const { prefix, from, to, codes } = rangeCodes(ctx.body);
+    const rows = codes.map((code) => ({ code }));
     const created = await sql`
       INSERT INTO celda ${sql(rows)} ON CONFLICT (codigo) DO NOTHING RETURNING id`;
     await audit(null, ctx.user.id, 'crear_celdas', 'celda', null, { prefix, from, to, creadas: created.length });
     spotsChanged();
     ctx.status = 201;
     return { created: created.length };
+  });
+
+  // Eliminar varias celdas de un rango (solo las que nunca se han usado)
+  r.post('/spots/bulk-delete', ADMIN, async (ctx) => {
+    const { prefix, from, to, codes } = rangeCodes(ctx.body);
+    const deleted = await sql`
+      DELETE FROM celda c WHERE c.codigo IN ${sql(codes)} AND ${SIN_HISTORIAL(sql)}
+      RETURNING c.codigo`;
+    const [{ kept }] = await sql`SELECT count(*)::int AS kept FROM celda WHERE codigo IN ${sql(codes)}`;
+    await audit(null, ctx.user.id, 'eliminar_celdas', 'celda', null, { prefix, from, to, eliminadas: deleted.length });
+    if (deleted.length) spotsChanged();
+    return { deleted: deleted.length, kept };
+  });
+
+  // Eliminar una celda (solo si nunca se ha usado; si tiene historial se debe desactivar)
+  r.delete('/spots/:id', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    const [s] = await sql`SELECT * FROM celda WHERE id = ${id}`;
+    if (!s) throw notFound('Celda no encontrada');
+    const [row] = await sql`DELETE FROM celda c WHERE c.id = ${id} AND ${SIN_HISTORIAL(sql)} RETURNING c.id`;
+    if (!row) {
+      throw conflict(
+        `La celda ${s.code} no se puede eliminar porque está ocupada o tiene asignaciones o entradas registradas. ` +
+          'Desactívela para que no se use más.',
+      );
+    }
+    await audit(null, ctx.user.id, 'eliminar_celda', 'celda', id, { code: s.code });
+    spotsChanged();
+    return { ok: true };
   });
 
   r.patch('/spots/:id', ADMIN, async (ctx) => {

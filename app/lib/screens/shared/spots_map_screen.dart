@@ -63,6 +63,14 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                         },
                         icon: const Icon(Icons.add_box_outlined),
                       ),
+                    if (user.isAdmin)
+                      IconButton(
+                        tooltip: 'Eliminar celdas',
+                        onPressed: () async {
+                          if (await _deleteSpotsDialog(context)) reload();
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                      ),
                   ],
                 ),
               ),
@@ -224,6 +232,30 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                         reload();
                       },
                     ),
+                    // Solo se ofrece en celdas sin asignación y desocupadas; la API además
+                    // rechaza las que tienen historial (esas se deben desactivar).
+                    if (s['assignment_id'] == null && !asBool(s['is_occupied']))
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Eliminar celda'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          if (await confirm(
+                              context,
+                              'Eliminar celda',
+                              '¿Eliminar la celda ${asStr(s['code'])}? Esta acción no se puede deshacer.\n\n'
+                                  'Solo se eliminan celdas que nunca se han usado. Si la celda tiene historial '
+                                  '(asignaciones o entradas), desactívela en su lugar.',
+                              danger: true,
+                              ok: 'Eliminar')) {
+                            if (!context.mounted) return;
+                            await runAction(context, () => session.api.delete('/spots/${asInt(s['id'])}'),
+                                success: 'Celda ${asStr(s['code'])} eliminada');
+                            reload();
+                          }
+                        },
+                      ),
                   ],
                 ),
               ],
@@ -255,6 +287,68 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
       }),
       success: 'Celda ${asStr(spot['code'])} asignada a ${asStr(resident['full_name'])}',
     );
+  }
+
+  Future<bool> _deleteSpotsDialog(BuildContext context) async {
+    final prefix = TextEditingController(text: 'D');
+    final from = TextEditingController(text: '1');
+    final to = TextEditingController(text: '10');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar celdas'),
+        content: SizedBox(
+          width: 340,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Se eliminan las celdas del rango que nunca se han usado. Las que tengan '
+                  'asignaciones o entradas registradas se conservan (puede desactivarlas desde el mapa).'),
+              const SizedBox(height: 12),
+              TextField(controller: prefix, decoration: inputDeco('Prefijo (letra)')),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                      child: TextField(
+                          controller: from, keyboardType: TextInputType.number, decoration: inputDeco('Desde'))),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: TextField(
+                          controller: to, keyboardType: TextInputType.number, decoration: inputDeco('Hasta'))),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return false;
+    final res = await runAction(
+      context,
+      () => session.api.post('/spots/bulk-delete', {
+        'prefix': prefix.text,
+        'from': int.tryParse(from.text) ?? 0,
+        'to': int.tryParse(to.text) ?? 0,
+      }),
+    );
+    if (res != null && context.mounted) {
+      final m = asMap(res);
+      final kept = asInt(m['kept']);
+      showSnack(
+          context,
+          'Celdas eliminadas: ${asInt(m['deleted'])}'
+          '${kept > 0 ? ' · $kept se conservaron porque tienen historial' : ''}');
+    }
+    return res != null;
   }
 
   Future<bool> _addSpotsDialog(BuildContext context) async {
