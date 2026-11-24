@@ -1,6 +1,6 @@
 // Gestión de usuarios y roles (RF07, UC-01), bloqueo (RF18), restablecer clave (RF12).
 import { sql } from '../db.js';
-import { badRequest, notFound, required, intParam } from '../http.js';
+import { badRequest, conflict, notFound, required, intParam } from '../http.js';
 import { ADMIN, hashPassword, validatePassword, randomPassword } from '../auth.js';
 import { audit } from '../events.js';
 
@@ -85,5 +85,24 @@ export default function userRoutes(r) {
     if (!u) throw notFound('Usuario no encontrado');
     await audit(null, ctx.user.id, 'restablecer_contrasena', 'cuenta_usuario', id);
     return { ...u, temporary_password: temp };
+  });
+
+  // Eliminación definitiva: solo cuentas creadas por error que nunca han ingresado ni registrado movimientos.
+  // Las demás se desactivan para conservar la trazabilidad de la auditoría.
+  r.delete('/users/:id', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    if (id === ctx.user.id) throw badRequest('No puede eliminar su propia cuenta');
+    const [u] = await sql`SELECT id, usuario, rol, ultimo_ingreso_en FROM cuenta_usuario WHERE id = ${id}`;
+    if (!u) throw notFound('Usuario no encontrado');
+    const [h] = await sql`SELECT count(*)::int AS movimientos FROM movimiento_vehiculo WHERE registrado_por = ${id}`;
+    if (u.last_login_at || h.movimientos) {
+      throw conflict(
+        `El usuario ${u.username} no se puede eliminar porque ya ingresó al sistema o registró movimientos. ` +
+          'Use «Desactivar» para conservar su historial.',
+      );
+    }
+    await sql`DELETE FROM cuenta_usuario WHERE id = ${id}`;
+    await audit(null, ctx.user.id, 'eliminar_usuario', 'cuenta_usuario', id, { username: u.username, role: u.role });
+    return { ok: true };
   });
 }

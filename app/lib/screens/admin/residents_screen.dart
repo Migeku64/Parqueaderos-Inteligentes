@@ -239,11 +239,27 @@ class _ResidentDetailScreenState extends State<ResidentDetailScreen> {
                                         await runAction(context, () => session.api.delete('/vehicles/${asInt(v['id'])}'));
                                         _refresh();
                                       }
+                                    } else if (op == 'purge') {
+                                      if (await confirm(
+                                          context,
+                                          'Eliminar vehículo',
+                                          '¿Eliminar el vehículo ${asStr(v['plate'])}? Esta acción no se puede deshacer.\n\n'
+                                              'Solo se puede eliminar si nunca ha tenido asignaciones ni entradas registradas; '
+                                              'en ese caso, use «Retirar».',
+                                          danger: true,
+                                          ok: 'Eliminar')) {
+                                        if (!context.mounted) return;
+                                        await runAction(
+                                            context, () => session.api.delete('/vehicles/${asInt(v['id'])}/permanent'),
+                                            success: 'Vehículo eliminado');
+                                        _refresh();
+                                      }
                                     }
                                   },
                                   itemBuilder: (_) => const [
                                     PopupMenuItem(value: 'edit', child: Text('Editar')),
                                     PopupMenuItem(value: 'delete', child: Text('Retirar')),
+                                    PopupMenuItem(value: 'purge', child: Text('Eliminar')),
                                   ],
                                 ),
                               ),
@@ -274,25 +290,55 @@ class _ResidentDetailScreenState extends State<ResidentDetailScreen> {
                           ],
                         ),
                 ),
-                if (asStr(r['status']) == 'activo')
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
-                      icon: const Icon(Icons.person_off_outlined),
-                      label: const Text('Inactivar residente'),
-                      onPressed: () async {
-                        if (await confirm(context, 'Inactivar residente',
-                            'El residente no participará en sorteos y su usuario quedará desactivado. Se conserva el historial.',
-                            danger: true, ok: 'Inactivar')) {
-                          if (!context.mounted) return;
-                          await runAction(context, () => session.api.delete('/residents/${asInt(r['id'])}'),
-                              success: 'Residente inactivado');
-                          _refresh();
-                        }
-                      },
-                    ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (asStr(r['status']) == 'activo')
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
+                          icon: const Icon(Icons.person_off_outlined),
+                          label: const Text('Inactivar residente'),
+                          onPressed: () async {
+                            if (await confirm(context, 'Inactivar residente',
+                                'El residente no participará en sorteos y su usuario quedará desactivado. Se conserva el historial.',
+                                danger: true, ok: 'Inactivar')) {
+                              if (!context.mounted) return;
+                              await runAction(context, () => session.api.delete('/residents/${asInt(r['id'])}'),
+                                  success: 'Residente inactivado');
+                              _refresh();
+                            }
+                          },
+                        ),
+                      // Para registros creados por error: la API solo lo permite si el residente
+                      // nunca ha tenido asignaciones ni entradas/salidas.
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Eliminar residente'),
+                        onPressed: () async {
+                          if (await confirm(
+                              context,
+                              'Eliminar residente',
+                              '¿Eliminar a ${asStr(r['full_name'])}? Se borrarán sus datos, sus vehículos y su usuario. '
+                                  'Esta acción no se puede deshacer.\n\n'
+                                  'Solo se puede eliminar si nunca ha tenido asignaciones ni entradas registradas; '
+                                  'en ese caso, use «Inactivar residente».',
+                              danger: true,
+                              ok: 'Eliminar')) {
+                            if (!context.mounted) return;
+                            final ok = await runAction(
+                                context, () => session.api.delete('/residents/${asInt(r['id'])}/permanent'),
+                                success: 'Residente eliminado');
+                            if (ok != null && context.mounted) Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                    ],
                   ),
+                ),
               ],
             ),
           );

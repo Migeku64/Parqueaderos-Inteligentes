@@ -212,6 +212,48 @@ test('eliminar celdas: solo las que nunca se han usado', async () => {
   assert.ok(!after.data.some((s) => s.code.startsWith('Z')));
 });
 
+test('eliminar residentes, vehículos, usuarios y ciclos creados por error', async () => {
+  // Residente nuevo con cuenta y vehículo: se puede eliminar porque nunca se ha usado
+  const c = await api('POST', '/residents', {
+    full_name: 'Registro Equivocado',
+    document_number: '888000222',
+    house_number: '298',
+    vehicle: { plate: 'ERR111', type: 'carro' },
+    account: { username: 'equivocado', password: 'secreta1' },
+  });
+  assert.equal(c.status, 201, JSON.stringify(c.data));
+  const v2 = await api('POST', `/residents/${c.data.id}/vehicles`, { plate: 'ERR222', type: 'moto' });
+  assert.equal((await api('DELETE', `/vehicles/${v2.data.id}/permanent`, null, 'guarda')).status, 403);
+  assert.equal((await api('DELETE', `/vehicles/${v2.data.id}/permanent`)).status, 200);
+  assert.equal((await api('DELETE', `/residents/${c.data.id}/permanent`)).status, 200);
+  assert.equal((await api('GET', `/residents/${c.data.id}`)).status, 404);
+  const [acc] = await sql`SELECT id FROM cuenta_usuario WHERE usuario = 'equivocado'`;
+  assert.equal(acc, undefined, 'la cuenta del residente también se elimina');
+
+  // Un residente o vehículo con asignaciones no se elimina: se debe inactivar o retirar
+  const [used] = await sql`SELECT residente_id, vehiculo_id FROM asignacion LIMIT 1`;
+  assert.equal((await api('DELETE', `/residents/${used.resident_id}/permanent`)).status, 409);
+  assert.equal((await api('DELETE', `/vehicles/${used.vehicle_id}/permanent`)).status, 409);
+
+  // Usuarios: se elimina una cuenta que nunca ingresó; no la propia ni una que ya ingresó
+  const u = await api('POST', '/users', { username: 'guarda.error', password: 'secreta1', role: 'guarda', full_name: 'Guarda Error' });
+  assert.equal(u.status, 201, JSON.stringify(u.data));
+  assert.equal((await api('DELETE', `/users/${u.data.id}`)).status, 200);
+  const users = await api('GET', '/users');
+  const me = users.data.find((x) => x.username === 'admin');
+  const guard = users.data.find((x) => x.username === 'guarda');
+  assert.equal((await api('DELETE', `/users/${me.id}`)).status, 400);
+  assert.equal((await api('DELETE', `/users/${guard.id}`)).status, 409);
+
+  // Ciclos: solo los planeados sin asignaciones
+  const cy = await api('POST', '/cycles', { name: 'Ciclo por error', start_date: '2031-01-01', end_date: '2031-03-01' });
+  assert.equal(cy.status, 201, JSON.stringify(cy.data));
+  assert.equal((await api('DELETE', `/cycles/${cy.data.id}`)).status, 200);
+  const cycles = await api('GET', '/cycles');
+  const active = cycles.data.find((x) => x.status === 'activo');
+  assert.equal((await api('DELETE', `/cycles/${active.id}`)).status, 409);
+});
+
 test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async () => {
   const cyc = await api('GET', '/cycles');
   const active = cyc.data.find((c) => c.status === 'activo');

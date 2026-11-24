@@ -88,6 +88,23 @@ export default function cycleRoutes(r) {
     return u;
   });
 
+  // Eliminar un ciclo creado por error: solo si está planeado y aún no tiene asignaciones (sin sorteo)
+  r.delete('/cycles/:id', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    const c = await getCycle(id);
+    const [h] = await sql`SELECT count(*)::int AS asignaciones FROM asignacion WHERE ciclo_id = ${id}`;
+    if (c.status !== 'planeado' || h.asignaciones) {
+      throw conflict(
+        `El ciclo "${c.name}" no se puede eliminar porque ya está ${c.status === 'planeado' ? 'sorteado' : c.status}. ` +
+          'Solo se eliminan ciclos planeados sin asignaciones.',
+      );
+    }
+    await sql`DELETE FROM ciclo WHERE id = ${id}`;
+    await audit(null, ctx.user.id, 'eliminar_ciclo', 'ciclo', id, { nombre: c.name });
+    broadcast('assignments', { cycle_id: id });
+    return { ok: true };
+  });
+
   r.post('/cycles/:id/activate', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
     const c = await getCycle(id);

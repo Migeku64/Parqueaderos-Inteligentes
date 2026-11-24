@@ -178,6 +178,26 @@ class _CycleCard extends StatelessWidget {
                     if (await showCycleForm(context, existing: cycle)) onChanged();
                   },
                 ),
+              // Solo ciclos planeados y sin asignaciones (creados por error, antes del sorteo)
+              if (status == 'planeado' && asInt(cycle['assignments']) == 0)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Eliminar'),
+                  onPressed: () async {
+                    if (await confirm(
+                        context,
+                        'Eliminar ciclo',
+                        '¿Eliminar el ciclo "${asStr(cycle['name'])}"? Esta acción no se puede deshacer.',
+                        danger: true,
+                        ok: 'Eliminar')) {
+                      if (!context.mounted) return;
+                      final r = await runAction(context, () => session.api.delete('/cycles/${asInt(cycle['id'])}'),
+                          success: 'Ciclo eliminado');
+                      if (r != null) onChanged();
+                    }
+                  },
+                ),
               if (status == 'activo')
                 FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: AppColors.red),

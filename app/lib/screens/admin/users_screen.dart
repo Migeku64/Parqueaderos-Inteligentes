@@ -130,6 +130,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   const PopupMenuItem(value: 'reset', child: Text('Restablecer contraseña')),
                   if (role != 'residente') const PopupMenuItem(value: 'role', child: Text('Cambiar rol')),
                   PopupMenuItem(value: 'active', child: Text(active ? 'Desactivar' : 'Activar')),
+                  const PopupMenuItem(value: 'delete', child: Text('Eliminar')),
                 ],
               ),
       ),
@@ -200,6 +201,19 @@ class _UsersScreenState extends State<UsersScreen> {
       case 'active':
         await runAction(context, () => session.api.patch('/users/$id', {'is_active': !asBool(u['is_active'])}),
             success: 'Usuario actualizado');
+        break;
+      case 'delete':
+        if (await confirm(
+            context,
+            'Eliminar usuario',
+            '¿Eliminar el usuario $name? Esta acción no se puede deshacer.\n\n'
+                'Solo se puede eliminar si nunca ha ingresado al sistema ni registrado movimientos; '
+                'en ese caso, use «Desactivar».',
+            danger: true,
+            ok: 'Eliminar')) {
+          if (!context.mounted) return;
+          await runAction(context, () => session.api.delete('/users/$id'), success: 'Usuario eliminado');
+        }
         break;
     }
     _refresh();

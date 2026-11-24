@@ -1,6 +1,6 @@
 // Residentes (RF01, UC-02) y vehículos (RF02).
 import { sql } from '../db.js';
-import { badRequest, notFound, required, intParam, normalizePlate } from '../http.js';
+import { badRequest, conflict, notFound, required, intParam, normalizePlate } from '../http.js';
 import { ADMIN, STAFF, hashPassword, validatePassword } from '../auth.js';
 import { audit } from '../events.js';
 import { config } from '../config.js';
@@ -155,6 +155,31 @@ export default function residentRoutes(r) {
     return { ok: true };
   });
 
+  // Eliminación definitiva: solo para residentes creados por error que nunca se han usado
+  // (sin asignaciones ni entradas/salidas de sus vehículos). Si tienen historial se inactivan.
+  r.delete('/residents/:id/permanent', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    const [res] = await sql`SELECT id, nombre_completo FROM residente WHERE id = ${id}`;
+    if (!res) throw notFound('Residente no encontrado');
+    const [h] = await sql`
+      SELECT (SELECT count(*) FROM asignacion WHERE residente_id = ${id})::int AS asignaciones,
+             (SELECT count(*) FROM movimiento_vehiculo m JOIN vehiculo v ON v.id = m.vehiculo_id
+               WHERE v.residente_id = ${id})::int AS movimientos`;
+    if (h.asignaciones || h.movimientos) {
+      throw conflict(
+        `${res.full_name} no se puede eliminar porque tiene asignaciones o entradas registradas. ` +
+          'Use «Inactivar residente» para conservar su historial.',
+      );
+    }
+    await sql.begin(async (tx) => {
+      // La cuenta del residente (si tiene) se elimina con él; sus vehículos se borran en cascada.
+      await tx`DELETE FROM cuenta_usuario WHERE residente_id = ${id}`;
+      await tx`DELETE FROM residente WHERE id = ${id}`;
+    });
+    await audit(null, ctx.user.id, 'eliminar_residente', 'residente', id, { nombre: res.full_name });
+    return { ok: true };
+  });
+
   // ---------------- Vehículos ----------------
   r.get('/vehicles', STAFF, async (ctx) => {
     const plate = normalizePlate(ctx.query.plate);
@@ -194,6 +219,25 @@ export default function residentRoutes(r) {
     const [row] = await sql`UPDATE vehiculo SET activo = FALSE WHERE id = ${id} RETURNING id, placa`;
     if (!row) throw notFound('Vehículo no encontrado');
     await audit(null, ctx.user.id, 'inactivar_vehiculo', 'vehiculo', id, { placa: row.plate });
+    return { ok: true };
+  });
+
+  // Eliminación definitiva de un vehículo registrado por error (sin asignaciones ni entradas/salidas)
+  r.delete('/vehicles/:id/permanent', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    const [v] = await sql`SELECT id, placa FROM vehiculo WHERE id = ${id}`;
+    if (!v) throw notFound('Vehículo no encontrado');
+    const [h] = await sql`
+      SELECT (SELECT count(*) FROM asignacion WHERE vehiculo_id = ${id})::int AS asignaciones,
+             (SELECT count(*) FROM movimiento_vehiculo WHERE vehiculo_id = ${id})::int AS movimientos`;
+    if (h.asignaciones || h.movimientos) {
+      throw conflict(
+        `El vehículo ${v.plate} no se puede eliminar porque tiene asignaciones o entradas registradas. ` +
+          'Use «Retirar» para conservar su historial.',
+      );
+    }
+    await sql`DELETE FROM vehiculo WHERE id = ${id}`;
+    await audit(null, ctx.user.id, 'eliminar_vehiculo', 'vehiculo', id, { placa: v.plate });
     return { ok: true };
   });
 }
