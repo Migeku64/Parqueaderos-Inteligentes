@@ -37,11 +37,13 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: PageHeader(
-          title: 'Reportes',
-          subtitle: 'Seleccione el tipo de reporte',
-          actions: [FilledButton(onPressed: () {}, child: const Text('Exportar'))],
-        ),
+        body: Column(children: [
+          PageHeader(
+            title: 'Reportes',
+            subtitle: 'Seleccione el tipo de reporte',
+            actions: [FilledButton(onPressed: () {}, child: const Text('Exportar'))],
+          ),
+        ]),
       ),
     ));
     final titulo = tester.getBottomLeft(find.text('Seleccione el tipo de reporte'));
@@ -53,12 +55,15 @@ void main() {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+    // Como en la app: el encabezado va arriba, dentro de una columna
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: PageHeader(
-          title: 'Reportes',
-          actions: [FilledButton(onPressed: () {}, child: const Text('Exportar'))],
-        ),
+        body: Column(children: [
+          PageHeader(
+            title: 'Reportes',
+            actions: [FilledButton(onPressed: () {}, child: const Text('Exportar'))],
+          ),
+        ]),
       ),
     ));
     final titulo = tester.getCenter(find.text('Reportes'));
