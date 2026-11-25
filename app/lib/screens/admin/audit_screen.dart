@@ -78,7 +78,6 @@ class _AuditTab extends StatefulWidget {
 
 class _AuditTabState extends State<_AuditTab> {
   String _action = '';
-  int _ver = 0; // para recargar el resumen después de enviar el informe
 
   @override
   Widget build(BuildContext context) {
@@ -129,34 +128,11 @@ class _AuditTabState extends State<_AuditTab> {
                     if (!context.mounted) return;
                     await runAction(context, () => session.api.post('/audit/report', {'days': 7}),
                         success: 'Informe de auditoría enviado');
-                    setState(() => _ver++);
                   }
                 },
               ),
             ],
           ),
-        ),
-        // Resumen de la última semana (el mismo del informe automático)
-        Loader<Map<String, dynamic>>(
-          key: ValueKey('resumen-$_ver'),
-          load: () async => asMap(await session.api.get('/audit/summary', query: {'days': 7})),
-          builder: (context, s, reload) {
-            final items = asList(s['items']).where((i) => asInt(i['value']) > 0).toList();
-            const warn = {'alerta_seguridad', 'usuario_bloqueado', 'ingreso_rechazado', 'respaldos_error', 'login_fallido'};
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  Pill('Últimos 7 días: ${asInt(s['total'])} acciones'),
-                  for (final i in items)
-                    Pill('${asStr(i['label'])}: ${asInt(i['value'])}',
-                        color: warn.contains(asStr(i['key'])) ? AppColors.red : AppColors.green),
-                ],
-              ),
-            );
-          },
         ),
         Expanded(
           child: Loader<List<Map<String, dynamic>>>(
