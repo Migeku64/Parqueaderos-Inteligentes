@@ -47,9 +47,7 @@ Usuarios de prueba:
 |---|---|---|
 | Administradores (autores) | `mpinilla`, `acardona`, `jmontoya` (y `admin`) | `admin123` |
 | Guarda | `guarda` | `guarda123` |
-| Residentes (casas 1 a 300) | `casa` + número de casa: `casa150` (Miguel), `casa201`, `casa101`… | `residente123` |
-
-> Alternativa con Docker: desde la carpeta raíz, `docker compose up --build` levanta PostgreSQL + la API ya configuradas.
+| Residentes (casas 1 a 300) | `casa` + número de casa: `casa150`, `casa201`, `casa101`… | `residente123` |
 
 ---
 
