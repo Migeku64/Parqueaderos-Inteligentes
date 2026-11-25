@@ -233,8 +233,8 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                         reload();
                       },
                     ),
-                    // Solo se ofrece en celdas sin asignación y desocupadas; la API además
-                    // rechaza las que tienen historial (esas se deben desactivar).
+                    // Solo se ofrece en celdas sin asignación vigente y desocupadas. Si la celda
+                    // tiene historial, la API lo avisa y se pide una confirmación más fuerte.
                     if (s['assignment_id'] == null && !asBool(s['is_occupied']))
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
@@ -245,14 +245,11 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                           if (await confirm(
                               context,
                               'Eliminar celda',
-                              '¿Eliminar la celda ${asStr(s['code'])}? Esta acción no se puede deshacer.\n\n'
-                                  'Solo se eliminan celdas que nunca se han usado. Si la celda tiene historial '
-                                  '(asignaciones o entradas), desactívela en su lugar.',
+                              '¿Eliminar la celda ${asStr(s['code'])}? Esta acción no se puede deshacer.',
                               danger: true,
                               ok: 'Eliminar')) {
                             if (!context.mounted) return;
-                            await runAction(context, () => session.api.delete('/spots/${asInt(s['id'])}'),
-                                success: 'Celda ${asStr(s['code'])} eliminada');
+                            await _deleteSpot(context, s);
                             reload();
                           }
                         },
@@ -265,6 +262,70 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
         ),
       ),
     );
+  }
+
+  /// Elimina una celda. Si tiene historial (asignaciones o entradas anteriores), la API lo
+  /// avisa y se pide escribir el código de la celda para borrarla junto con ese historial.
+  Future<void> _deleteSpot(BuildContext context, Map<String, dynamic> spot) async {
+    final code = asStr(spot['code']);
+    final path = '/spots/${asInt(spot['id'])}';
+    try {
+      await session.api.delete(path);
+      if (context.mounted) showSnack(context, 'Celda $code eliminada');
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      final details = e.details;
+      if (e.status == 409 && details is Map && details['code'] == 'tiene_historial') {
+        if (!await _confirmHistoryDelete(context, code, e.message) || !context.mounted) return;
+        await runAction(context, () => session.api.delete('$path?force=1'),
+            success: 'Celda $code eliminada con su historial');
+      } else {
+        showSnack(context, e.message, error: true);
+      }
+    }
+  }
+
+  /// Confirmación fuerte: hay que escribir el código de la celda para poder borrarla.
+  Future<bool> _confirmHistoryDelete(BuildContext context, String code, String message) async {
+    final typed = TextEditingController();
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          icon: const Icon(Icons.delete_forever, color: AppColors.red, size: 40),
+          title: Text('¿Eliminar $code con su historial?'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message),
+                const SizedBox(height: 12),
+                Text('Para confirmar, escriba $code:'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: typed,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: inputDeco('Código de la celda', hint: code),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+              onPressed: typed.text.trim().toUpperCase() == code.toUpperCase() ? () => Navigator.pop(ctx, true) : null,
+              child: const Text('Eliminar definitivamente'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return r ?? false;
   }
 
   Future<void> _manualAssign(BuildContext context, Map<String, dynamic> spot) async {

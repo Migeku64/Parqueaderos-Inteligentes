@@ -189,7 +189,7 @@ test('mapa de celdas y resumen', async () => {
   assert.equal(bulk.data.created, 3);
 });
 
-test('eliminar celdas: solo las que nunca se han usado', async () => {
+test('eliminar celdas: sin historial de una vez; con historial solo confirmando', async () => {
   const z = await api('POST', '/spots/bulk', { prefix: 'Z', from: 1, to: 3 });
   assert.equal(z.data.created, 3);
   const all = await api('GET', '/spots');
@@ -199,12 +199,40 @@ test('eliminar celdas: solo las que nunca se han usado', async () => {
   const del = await api('DELETE', `/spots/${z01.id}`);
   assert.equal(del.status, 200);
   assert.equal((await api('DELETE', `/spots/${z01.id}`)).status, 404);
-  // Una celda con asignaciones (historial) no se elimina: se debe desactivar
-  const used = all.data.find((s) => s.assignment_id);
+  // Una celda asignada en el ciclo actual nunca se elimina, ni siquiera confirmando
+  const used = all.data.find((s) => s.assignment_id && !s.is_occupied);
   assert.ok(used, 'hay una celda asignada');
   const blocked = await api('DELETE', `/spots/${used.id}`);
   assert.equal(blocked.status, 409);
-  assert.match(blocked.data.error ?? blocked.data.message ?? JSON.stringify(blocked.data), /1 asignación .*Desactivar celda/s);
+  assert.match(blocked.data.error, /Cancele esa asignación/);
+  assert.equal((await api('DELETE', `/spots/${used.id}?force=1`)).status, 409);
+  const busy = all.data.find((s) => s.is_occupied);
+  const busyDel = await api('DELETE', `/spots/${busy.id}?force=1`);
+  assert.equal(busyDel.status, 409);
+  assert.match(busyDel.data.error, /ocupada en este momento/);
+  // Una celda con historial (asignación cancelada y una entrada): la API avisa qué tiene
+  // y, si el administrador confirma, la borra junto con su historial
+  const old = await api('POST', '/spots', { code: 'Z09' });
+  await sql`
+    INSERT INTO asignacion (ciclo_id, residente_id, vehiculo_id, celda_id, metodo, estado)
+    SELECT ciclo_id, residente_id, vehiculo_id, ${old.data.id}, 'manual', 'cancelada'
+    FROM asignacion WHERE id = ${used.assignment_id}`;
+  await sql`
+    INSERT INTO movimiento_vehiculo (placa, vehiculo_id, celda_id, tipo, autorizado)
+    SELECT v.placa, v.id, ${old.data.id}, 'entrada', TRUE
+    FROM asignacion a JOIN vehiculo v ON v.id = a.vehiculo_id WHERE a.id = ${used.assignment_id}`;
+  const warn = await api('DELETE', `/spots/${old.data.id}`);
+  assert.equal(warn.status, 409);
+  assert.equal(warn.data.details.code, 'tiene_historial');
+  assert.match(warn.data.error, /1 asignación .*1 entrada o salida/s);
+  assert.equal((await api('DELETE', `/spots/${old.data.id}?force=1`, null, 'guarda')).status, 403);
+  const forced = await api('DELETE', `/spots/${old.data.id}?force=1`);
+  assert.equal(forced.status, 200, JSON.stringify(forced.data));
+  assert.deepEqual(forced.data.deleted_history, { assignments: 1, movements: 1 });
+  const [{ n }] = await sql`SELECT count(*)::int AS n FROM asignacion WHERE celda_id = ${old.data.id}`;
+  assert.equal(n, 0);
+  const [log] = await sql`SELECT accion FROM auditoria WHERE accion = 'eliminar_celda_con_historial'`;
+  assert.ok(log, 'queda en la auditoría');
   // Por rango: elimina Z02 y Z03 y no toca las celdas con historial
   const range = await api('POST', '/spots/bulk-delete', { prefix: 'Z', from: 1, to: 3 });
   assert.equal(range.data.deleted, 2);

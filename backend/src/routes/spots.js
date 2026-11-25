@@ -1,6 +1,6 @@
 // Celdas del parqueadero (UC-03), disponibilidad en tiempo real (RF04, RF09, RF16).
 import { sql } from '../db.js';
-import { badRequest, conflict, notFound, required, intParam } from '../http.js';
+import { HttpError, badRequest, conflict, notFound, required, intParam } from '../http.js';
 import { ADMIN, ANY } from '../auth.js';
 import { audit } from '../events.js';
 import { broadcast } from '../ws.js';
@@ -114,21 +114,43 @@ export default function spotRoutes(r) {
     return { deleted: deleted.length, kept };
   });
 
-  // Eliminar una celda (solo si nunca se ha usado; si tiene historial se debe desactivar)
+  // Eliminar una celda. Si nunca se ha usado se elimina de una vez. Si tiene historial
+  // (asignaciones o entradas/salidas), la API avisa qué tiene; el administrador puede
+  // confirmar con ?force=1 y se borra la celda junto con su historial (queda en la auditoría).
   r.delete('/spots/:id', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
     const [s] = await sql`SELECT * FROM celda WHERE id = ${id}`;
     if (!s) throw notFound('Celda no encontrada');
     const [row] = await sql`DELETE FROM celda c WHERE c.id = ${id} AND ${SIN_HISTORIAL(sql)} RETURNING c.id`;
-    if (!row) {
-      // Decir exactamente qué historial tiene, para que el administrador entienda por qué.
-      const [h] = await sql`
-        SELECT (SELECT count(*)::int FROM asignacion a WHERE a.celda_id = ${id}) AS asignaciones,
-               (SELECT c.nombre FROM asignacion a JOIN ciclo c ON c.id = a.ciclo_id
-                 WHERE a.celda_id = ${id} ORDER BY a.id DESC LIMIT 1) AS ultimo_ciclo,
-               (SELECT count(*)::int FROM movimiento_vehiculo m WHERE m.celda_id = ${id}) AS movimientos`;
+    if (row) {
+      await audit(null, ctx.user.id, 'eliminar_celda', 'celda', id, { code: s.code });
+      spotsChanged();
+      return { ok: true };
+    }
+
+    // Nunca se borra una celda en uso: primero se libera o se cancela la asignación.
+    if (s.is_occupied) {
+      throw conflict(`La celda ${s.code} está ocupada en este momento. Márquela como libre antes de eliminarla.`);
+    }
+    const [vigente] = await sql`
+      SELECT r.nombre_completo, c.nombre FROM asignacion a
+      JOIN ciclo c ON c.id = a.ciclo_id JOIN residente r ON r.id = a.residente_id
+      WHERE a.celda_id = ${id} AND a.estado = 'vigente' AND c.estado <> 'cerrado' LIMIT 1`;
+    if (vigente) {
+      throw conflict(
+        `La celda ${s.code} está asignada a ${vigente.full_name} en el ciclo "${vigente.name}". ` +
+          'Cancele esa asignación antes de eliminarla.',
+      );
+    }
+
+    const [h] = await sql`
+      SELECT (SELECT count(*)::int FROM asignacion a WHERE a.celda_id = ${id}) AS asignaciones,
+             (SELECT c.nombre FROM asignacion a JOIN ciclo c ON c.id = a.ciclo_id
+               WHERE a.celda_id = ${id} ORDER BY a.id DESC LIMIT 1) AS ultimo_ciclo,
+             (SELECT count(*)::int FROM movimiento_vehiculo m WHERE m.celda_id = ${id}) AS movimientos`;
+    const force = ['1', 'true'].includes(String(ctx.query.force ?? ''));
+    if (!force) {
       const reasons = [];
-      if (s.is_occupied) reasons.push('está ocupada en este momento');
       if (h.asignaciones) {
         reasons.push(
           `tuvo ${h.asignaciones === 1 ? '1 asignación' : `${h.asignaciones} asignaciones`}` +
@@ -138,15 +160,27 @@ export default function spotRoutes(r) {
       if (h.movimientos) {
         reasons.push(`tiene ${h.movimientos === 1 ? '1 entrada o salida registrada' : `${h.movimientos} entradas y salidas registradas`}`);
       }
-      throw conflict(
-        `La celda ${s.code} no se puede eliminar porque ${reasons.join(' y ') || 'tiene historial'}. ` +
-          'Ese historial se conserva para los reportes y la auditoría. ' +
-          'Si no la va a usar más, ábrala y toque «Desactivar celda».',
+      throw new HttpError(
+        409,
+        `La celda ${s.code} tiene historial: ${reasons.join(' y ') || 'registros anteriores'}. ` +
+          'Si la elimina, también se borra ese historial y ya no aparecerá en los reportes. ' +
+          'Si solo quiere que no se use más, desactívela.',
+        { code: 'tiene_historial', asignaciones: h.asignaciones, movimientos: h.movimientos },
       );
     }
-    await audit(null, ctx.user.id, 'eliminar_celda', 'celda', id, { code: s.code });
+
+    await sql.begin(async (tx) => {
+      await tx`DELETE FROM movimiento_vehiculo WHERE celda_id = ${id}`;
+      await tx`DELETE FROM asignacion WHERE celda_id = ${id}`;
+      await tx`DELETE FROM celda WHERE id = ${id}`;
+    });
+    await audit(null, ctx.user.id, 'eliminar_celda_con_historial', 'celda', id, {
+      code: s.code,
+      asignaciones_borradas: h.asignaciones,
+      movimientos_borrados: h.movimientos,
+    });
     spotsChanged();
-    return { ok: true };
+    return { ok: true, deleted_history: { assignments: h.asignaciones, movements: h.movimientos } };
   });
 
   r.patch('/spots/:id', ADMIN, async (ctx) => {
