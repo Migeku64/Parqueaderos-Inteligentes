@@ -5,6 +5,7 @@
 import { sql } from '../src/db.js';
 import { hashPassword } from '../src/auth.js';
 import { confirmDraw } from '../src/services/draw.js';
+import { demoName } from './nombres_demo.js';
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -18,9 +19,9 @@ function addMonths(d, m) {
 const TOTAL_HOUSES = 300;
 
 const RESIDENTS = [
-  ['Miguel Ángel Pinilla', '1012345678', '', '150', 'JEEP', 'WRANGLER 2025', 'Rojo', 'ABC123', 'carro', 0, 1, false],
-  ['Ariadna Cardona', '1023456789', '', '201', 'MAZDA', '3 2022', 'Gris', 'XYZ789', 'carro', 0, 0, false],
-  ['Julián Montoya', '1034567890', '', '205', 'RENAULT', 'LOGAN 2019', 'Blanco', 'JKL456', 'carro', 0, 2, false],
+  ['Mauricio Salazar', '1012345678', '', '150', 'JEEP', 'WRANGLER 2025', 'Rojo', 'ABC123', 'carro', 0, 1, false],
+  ['Catalina Ospina', '1023456789', '', '201', 'MAZDA', '3 2022', 'Gris', 'XYZ789', 'carro', 0, 0, false],
+  ['Gustavo Quintero', '1034567890', '', '205', 'RENAULT', 'LOGAN 2019', 'Blanco', 'JKL456', 'carro', 0, 2, false],
   ['Juan Pérez', '12345678', '', '101', 'CHEVROLET', 'SPARK 2018', 'Azul', 'BCD234', 'carro', 0, 0, false],
   ['María Gómez', '87654321', '', '102', 'KIA', 'PICANTO 2021', 'Negro', 'EFG567', 'carro', 150000, 0, false],
   ['Carlos López', '111222333', '', '103', null, null, null, null, null, 0, 0, false],
@@ -72,15 +73,13 @@ async function main() {
     }
 
     // Un residente por cada una de las demás casas (1 a 300): hay mucha más demanda que celdas
-    const first = ['Ana', 'Luis', 'Paula', 'Jorge', 'Daniela', 'Óscar', 'Carolina', 'Mateo', 'Juliana', 'Santiago', 'Lina', 'Ricardo', 'Sara', 'Andrés', 'Valeria', 'Tomás'];
-    const last = ['García', 'Martínez', 'Sánchez', 'Díaz', 'Ruiz', 'Jiménez', 'Ortiz', 'Silva', 'Mendoza', 'Rincón', 'Castro', 'Vargas', 'Rojas'];
     const letters = 'BCDFGHJKLMNPRSTVWXYZ';
     const usedHouses = new Set(RESIDENTS.map((r) => r[3]));
     let i = 0;
     for (let n = 1; n <= TOTAL_HOUSES; n++) {
       const number = String(n);
       if (usedHouses.has(number)) continue;
-      const name = `${first[i % first.length]} ${last[(i * 7) % last.length]} ${last[(i * 3 + 1) % last.length]}`;
+      const name = demoName(i);
       const [h] = await tx`INSERT INTO vivienda (bloque, numero) VALUES ('', ${number})
                            ON CONFLICT (bloque, numero) DO UPDATE SET numero = EXCLUDED.numero RETURNING id`;
       const doc = String(1100000000 + i * 7919);

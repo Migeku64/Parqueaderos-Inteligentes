@@ -356,7 +356,7 @@ test('sorteo del próximo ciclo: preview, reglas de elegibilidad y confirmación
 test('vista del residente', async () => {
   const me = await api('GET', '/me/summary', null, 'res');
   assert.equal(me.status, 200, JSON.stringify(me.data));
-  assert.equal(me.data.resident.full_name, 'Miguel Ángel Pinilla');
+  assert.equal(me.data.resident.full_name, 'Mauricio Salazar');
   assert.ok(['ACTIVO', 'INACTIVO', 'PRÓXIMO'].includes(me.data.turn_status));
   assert.ok(me.data.vehicles.length >= 1);
 });
