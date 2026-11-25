@@ -310,6 +310,18 @@ test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async 
   const notif = await api('GET', '/notifications');
   assert.ok(notif.data.items.some((n) => n.title.includes('ZZZ999')));
 
+  // Borrar notificaciones: una, solo las leídas o todas; nadie borra las de otro usuario
+  const one = notif.data.items.find((n) => n.title.includes('ZZZ999'));
+  assert.equal((await api('DELETE', `/notifications/${one.id}`, null, 'guarda')).status, 404);
+  assert.equal((await api('DELETE', `/notifications/${one.id}`)).status, 200);
+  assert.ok(!(await api('GET', '/notifications')).data.items.some((n) => n.id === one.id));
+  await api('POST', '/notifications/read-all');
+  const readDel = await api('DELETE', '/notifications?only=read');
+  assert.equal(readDel.status, 200);
+  assert.equal((await api('GET', '/notifications')).data.items.filter((n) => n.read_at).length, 0);
+  assert.equal((await api('DELETE', '/notifications')).status, 200);
+  assert.equal((await api('GET', '/notifications')).data.items.length, 0);
+
   const reader = await api('POST', '/movements/reader', { plate: free.plate, type: 'entrada' }, null, { 'X-Device-Key': 'lector-123' });
   assert.equal(reader.status, 201);
   assert.equal(reader.data.movement.source, 'lector');

@@ -85,6 +85,24 @@ export default function miscRoutes(r) {
     return { ok: true };
   });
 
+  // Borrar notificaciones: cada usuario solo borra las suyas. Las alertas de seguridad
+  // siguen registradas en la auditoría aunque se borre el aviso.
+  r.delete('/notifications/:id', ANY, async (ctx) => {
+    const rows = await sql`DELETE FROM notificacion
+      WHERE id = ${intParam(ctx.params.id)} AND cuenta_usuario_id = ${ctx.user.id} RETURNING id`;
+    if (!rows.length) throw notFound('Notificación no encontrada');
+    return { deleted: 1 };
+  });
+
+  // ?only=read borra solo las leídas; sin parámetro, todas
+  r.delete('/notifications', ANY, async (ctx) => {
+    const onlyRead = ctx.query.only === 'read';
+    const rows = onlyRead
+      ? await sql`DELETE FROM notificacion WHERE cuenta_usuario_id = ${ctx.user.id} AND leido_en IS NOT NULL RETURNING id`
+      : await sql`DELETE FROM notificacion WHERE cuenta_usuario_id = ${ctx.user.id} RETURNING id`;
+    return { deleted: rows.length };
+  });
+
   // ---------- Auditoría ----------
   const auditQuery = (q, limit) => sql`
       SELECT a.id, a.accion, a.entidad, a.entidad_id, a.realizado_en, a.detalles, u.usuario
