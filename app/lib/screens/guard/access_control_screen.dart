@@ -172,8 +172,10 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
             const SizedBox(height: 8),
             PlateBadge(asStr(movement['plate']), big: true),
             const SizedBox(height: 10),
+            // La tarjeta siempre es clara (verde o roja), así que el texto va oscuro también en modo oscuro
             Text(asStr(r['message']),
-                textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w700)),
             if (resident != null)
               Text('${asStr(resident['full_name'])} · Casa ${asStr(resident['house'])}',
                   style: const TextStyle(color: AppColors.muted)),
