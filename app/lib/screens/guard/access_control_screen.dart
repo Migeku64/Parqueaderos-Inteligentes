@@ -229,6 +229,9 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
                       ? const Pill('Sin parqueadero en el ciclo actual', color: AppColors.red)
                       : Pill('Celda ${asStr(a['spot_code'])} hasta ${fmtDate(a['end_date'])}', color: AppColors.green),
                   if (asBool(c['inside'])) const Pill('Está dentro del conjunto', color: AppColors.amber),
+                  // Otro vehículo de la misma casa ya está en la celda
+                  if (a != null && !asBool(c['inside']) && asBool(a['is_occupied']))
+                    const Pill('Celda ocupada por otro vehículo de la casa', color: AppColors.red),
                   if (canEnter) const Pill('Puede ingresar', color: AppColors.green),
                 ]),
               ],

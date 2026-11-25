@@ -52,6 +52,10 @@ async function registerMovement({ plate: rawPlate, type, userId, source = 'manua
         reason = 'El residente no tiene parqueadero asignado en el ciclo actual';
       } else if (info.inside) {
         throw new HttpError(409, `El vehículo ${plate} ya tiene una entrada registrada (celda ${info.assignment.spot_code})`);
+      } else if (info.assignment.is_occupied) {
+        // La celda es de la casa: si ya hay otro vehículo de la misma casa adentro, no cabe un segundo
+        authorized = false;
+        reason = `La celda ${info.assignment.spot_code} ya está ocupada por otro vehículo de la casa`;
       } else {
         spotId = info.assignment.parking_spot_id;
         await tx`UPDATE celda SET ocupada = TRUE WHERE id = ${spotId}`;
@@ -107,7 +111,7 @@ export default function movementRoutes(r) {
   r.get('/movements/check/:plate', STAFF, async (ctx) => {
     const plate = normalizePlate(ctx.params.plate);
     const info = await lookupPlate(plate);
-    return { ...info, can_enter: !!(info.vehicle && info.assignment && !info.inside) };
+    return { ...info, can_enter: !!(info.vehicle && info.assignment && !info.inside && !info.assignment.is_occupied) };
   });
 
   r.post('/movements', STAFF, async (ctx) => {

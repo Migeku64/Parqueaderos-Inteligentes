@@ -273,8 +273,22 @@ test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async 
   const e2 = await api('POST', '/movements', { plate: free.plate, type: 'entrada' }, 'guarda');
   assert.equal(e2.status, 409);
 
+  // Un segundo carro de la misma casa (por ejemplo, de un familiar) no entra si la celda ya está ocupada
+  const fam = await api('POST', `/residents/${free.resident_id}/vehicles`, { plate: 'FAM123', type: 'carro' });
+  assert.equal(fam.status, 201, JSON.stringify(fam.data));
+  const e3 = await api('POST', '/movements', { plate: 'FAM123', type: 'entrada' }, 'guarda');
+  assert.equal(e3.status, 201);
+  assert.equal(e3.data.authorized, false);
+  assert.ok(e3.data.reason.includes('ya está ocupada'), e3.data.reason);
+
   const s1 = await api('POST', '/movements', { plate: free.plate, type: 'salida' }, 'guarda');
   assert.equal(s1.status, 201);
+
+  // Cuando sale el primero, el carro del familiar sí puede entrar a la celda de la casa
+  const e4 = await api('POST', '/movements', { plate: 'FAM123', type: 'entrada' }, 'guarda');
+  assert.equal(e4.data.authorized, true);
+  assert.equal(e4.data.spot_code, free.spot_code);
+  assert.equal((await api('POST', '/movements', { plate: 'FAM123', type: 'salida' }, 'guarda')).status, 201);
   const [spot] = await sql`SELECT ocupada FROM celda WHERE codigo = ${free.spot_code}`;
   assert.equal(spot.is_occupied, false);
 
