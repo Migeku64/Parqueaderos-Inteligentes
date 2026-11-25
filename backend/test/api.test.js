@@ -123,6 +123,10 @@ test('login incorrecto y bloqueo tras 5 intentos', async () => {
   const ok = await api('POST', '/auth/login', { username: 'casa101', password: 'residente123' }, null);
   assert.equal(ok.status, 423, 'sigue bloqueado aunque la clave sea correcta');
   const users = await api('GET', '/users');
+  // Las cuentas de las casas salen en orden natural: casa1, casa2, casa3… y no casa1, casa10, casa100
+  const casas = users.data.filter((u) => /^casa\d+$/.test(u.username)).map((u) => Number(u.username.slice(4)));
+  assert.deepEqual(casas.slice(0, 12), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(casas, [...casas].sort((x, y) => x - y));
   const jp = users.data.find((u) => u.username === 'casa101');
   assert.equal(jp.is_blocked, true);
   const reset = await api('POST', `/users/${jp.id}/reset-password`, {});

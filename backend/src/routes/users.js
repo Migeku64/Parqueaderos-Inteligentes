@@ -12,7 +12,10 @@ export default function userRoutes(r) {
   r.get('/users', ADMIN, async () => {
     return sql`SELECT ${cols}, r.nombre_completo AS resident_name
                FROM cuenta_usuario u LEFT JOIN residente r ON r.id = u.residente_id
-               ORDER BY u.rol, u.usuario`;
+               -- Orden natural: casa1, casa2, … casa10, casa11 … (no casa1, casa10, casa100)
+               ORDER BY u.rol, regexp_replace(u.usuario, '[0-9]+$', ''),
+                        length(substring(u.usuario from '[0-9]+$')) NULLS FIRST,
+                        substring(u.usuario from '[0-9]+$'), u.usuario`;
   });
 
   r.post('/users', ADMIN, async (ctx) => {
