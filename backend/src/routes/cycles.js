@@ -1,7 +1,7 @@
 // Ciclos (RF17), sorteo y asignación (RF03, UC-04), historial (RF10, UC-09).
 import { sql } from '../db.js';
 import { config } from '../config.js';
-import { badRequest, conflict, notFound, required, intParam, isDate } from '../http.js';
+import { HttpError, badRequest, conflict, notFound, required, intParam, isDate } from '../http.js';
 import { ADMIN, STAFF } from '../auth.js';
 import { audit, notify } from '../events.js';
 import { broadcast } from '../ws.js';
@@ -190,11 +190,35 @@ export default function cycleRoutes(r) {
     if (!veh) throw badRequest('El residente no tiene un vehículo activo');
     const [spot] = await sql`SELECT id, activo FROM celda WHERE id = ${b.parking_spot_id}`;
     if (!spot || !spot.is_active) throw badRequest('Celda no disponible');
+
+    // Misma regla del sorteo: quien usó el parqueadero en el ciclo anterior no repite.
+    // La administración puede hacer una excepción (force) escribiendo el motivo; queda en la auditoría.
+    const [prev] = await sql`
+      SELECT id, nombre FROM ciclo
+      WHERE id <> ${c.id} AND fecha_inicio < ${c.start_date}
+      ORDER BY fecha_inicio DESC LIMIT 1`;
+    let reason = String(b.reason || '').trim();
+    if (prev) {
+      const [used] = await sql`
+        SELECT 1 FROM asignacion
+        WHERE residente_id = ${b.resident_id} AND ciclo_id = ${prev.id} AND estado IN ('vigente','finalizada')`;
+      if (used && !b.force) {
+        throw new HttpError(
+          409,
+          `Este residente usó el parqueadero en el ciclo anterior ("${prev.name}") y no debería repetir. ` +
+            'Solo asígnelo si es una excepción justificada.',
+          { code: 'ciclo_anterior', ciclo: prev.name },
+        );
+      }
+      if (used && !reason) throw badRequest('Escriba el motivo de la excepción');
+      if (!used) reason = '';
+    }
+    const notes = reason ? `Excepción (usó el ciclo anterior): ${reason}` : b.notes || null;
     const [a] = await sql`
       INSERT INTO asignacion (ciclo_id, residente_id, vehiculo_id, celda_id, metodo, observaciones)
-      VALUES (${c.id}, ${b.resident_id}, ${veh.id}, ${b.parking_spot_id}, 'manual', ${b.notes || null})
+      VALUES (${c.id}, ${b.resident_id}, ${veh.id}, ${b.parking_spot_id}, 'manual', ${notes})
       RETURNING *`;
-    await audit(null, ctx.user.id, 'asignacion_manual', 'asignacion', a.id, b);
+    await audit(null, ctx.user.id, 'asignacion_manual', 'asignacion', a.id, reason ? { ...b, excepcion: true, motivo: reason } : b);
     const [s] = await sql`SELECT codigo FROM celda WHERE id = ${a.parking_spot_id}`;
     await notify({
       residentIds: [Number(b.resident_id)],

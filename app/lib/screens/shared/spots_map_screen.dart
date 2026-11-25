@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api.dart';
 import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
@@ -277,15 +278,68 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
     final active = open.firstWhere((c) => asStr(c['status']) == 'activo', orElse: () => open.first);
     final resident = await pickResident(context, title: 'Asignar celda ${asStr(spot['code'])} (${asStr(active['name'])})');
     if (resident == null || !context.mounted) return;
-    await runAction(
-      context,
-      () => session.api.post('/assignments', {
-        'cycle_id': asInt(active['id']),
-        'resident_id': asInt(resident['id']),
-        'parking_spot_id': asInt(spot['id']),
-        'notes': 'Asignación manual desde el mapa',
-      }),
-      success: 'Celda ${asStr(spot['code'])} asignada a ${asStr(resident['full_name'])}',
+    final body = {
+      'cycle_id': asInt(active['id']),
+      'resident_id': asInt(resident['id']),
+      'parking_spot_id': asInt(spot['id']),
+      'notes': 'Asignación manual desde el mapa',
+    };
+    final ok = 'Celda ${asStr(spot['code'])} asignada a ${asStr(resident['full_name'])}';
+    try {
+      await session.api.post('/assignments', body);
+      if (context.mounted) showSnack(context, ok);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      final details = e.details;
+      if (e.status == 409 && details is Map && details['code'] == 'ciclo_anterior') {
+        // Usó el parqueadero en el ciclo anterior: solo se asigna como excepción, con motivo
+        final reason = await _exceptionReason(context, e.message);
+        if (reason == null || !context.mounted) return;
+        await runAction(context, () => session.api.post('/assignments', {...body, 'force': true, 'reason': reason}),
+            success: '$ok (excepción registrada en la auditoría)');
+      } else {
+        showSnack(context, e.message, error: true);
+      }
+    }
+  }
+
+  /// Pide el motivo de una excepción a la regla del ciclo anterior. Devuelve null si se cancela.
+  Future<String?> _exceptionReason(BuildContext context, String message) async {
+    final reason = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          icon: const Icon(Icons.warning_amber_rounded, color: AppColors.amber, size: 40),
+          title: const Text('Usó el parqueadero en el ciclo anterior'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reason,
+                  autofocus: true,
+                  maxLines: 2,
+                  decoration: inputDeco('Motivo de la excepción', hint: 'Ej.: condición médica, orden de la administración'),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('No asignar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.amber),
+              onPressed: reason.text.trim().isEmpty ? null : () => Navigator.pop(ctx, reason.text.trim()),
+              child: const Text('Asignar como excepción'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

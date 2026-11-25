@@ -311,6 +311,23 @@ test('sorteo del próximo ciclo: preview, reglas de elegibilidad y confirmación
   const ipas = pv.data.proposal.map((p) => p.ipa);
   assert.deepEqual(ipas, [...ipas].sort((a, b) => b - a));
 
+  // La asignación manual aplica la misma regla: quien usó el ciclo anterior no repite,
+  // salvo una excepción con motivo, que queda registrada.
+  const repeated = [...activeResidents][0];
+  const freeSpot = pv.data.proposal[0].parking_spot_id;
+  const blocked = await api('POST', '/assignments', { cycle_id: next.id, resident_id: repeated, parking_spot_id: freeSpot });
+  assert.equal(blocked.status, 409, JSON.stringify(blocked.data));
+  assert.equal(blocked.data.details.code, 'ciclo_anterior');
+  const noReason = await api('POST', '/assignments', { cycle_id: next.id, resident_id: repeated, parking_spot_id: freeSpot, force: true });
+  assert.equal(noReason.status, 400);
+  const forced = await api('POST', '/assignments', {
+    cycle_id: next.id, resident_id: repeated, parking_spot_id: freeSpot, force: true, reason: 'Caso de prueba',
+  });
+  assert.equal(forced.status, 201, JSON.stringify(forced.data));
+  assert.ok(String(forced.data.notes).includes('Caso de prueba'));
+  const canceled = await api('POST', `/assignments/${forced.data.id}/cancel`, { reason: 'prueba' });
+  assert.equal(canceled.status, 200, JSON.stringify(canceled.data));
+
   // Confirmar la propuesta tal como la vio el administrador
   const proposal = pv.data.proposal.map((p) => ({ resident_id: p.resident_id, parking_spot_id: p.parking_spot_id }));
   const conf = await api('POST', `/cycles/${next.id}/draw`, { mode: 'prioridad', proposal });
