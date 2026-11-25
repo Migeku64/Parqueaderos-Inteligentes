@@ -52,10 +52,13 @@ class _MovementsScreenState extends State<MovementsScreen> {
                   },
                 ),
               ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.event),
-                label: Text(_allDays ? 'Todas las fechas' : fmtDate(isoDate(_day))),
-                onPressed: () async {
+              // Fecha: un día o todas las fechas. Son excluyentes: al elegir una se quita la otra
+              ChoiceChip(
+                avatar: Icon(Icons.event, size: 18, color: _allDays ? null : Theme.of(context).colorScheme.primary),
+                label: Text(_allDays ? 'Elegir fecha' : fmtDate(isoDate(_day))),
+                selected: !_allDays,
+                showCheckmark: false,
+                onSelected: (_) async {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _day,
@@ -70,11 +73,12 @@ class _MovementsScreenState extends State<MovementsScreen> {
                   }
                 },
               ),
-              FilterChip(
+              ChoiceChip(
                 label: const Text('Todas las fechas'),
                 selected: _allDays,
-                onSelected: (v) => setState(() => _allDays = v),
+                onSelected: (_) => setState(() => _allDays = true),
               ),
+              const SizedBox(width: 8),
               for (final f in const ['todos', 'autorizados', 'rechazados'])
                 ChoiceChip(
                   label: Text(f[0].toUpperCase() + f.substring(1)),
