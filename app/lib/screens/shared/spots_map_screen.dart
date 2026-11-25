@@ -291,8 +291,9 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
     } on ApiException catch (e) {
       if (!context.mounted) return;
       final details = e.details;
-      if (e.status == 409 && details is Map && details['code'] == 'ciclo_anterior') {
-        // Usó el parqueadero en el ciclo anterior: solo se asigna como excepción, con motivo
+      if (e.status == 409 && details is Map && (details['code'] == 'requiere_excepcion' || details['code'] == 'ciclo_anterior')) {
+        // No cumple las reglas del sorteo (deuda, cuenta bloqueada o usó el ciclo anterior):
+        // solo se asigna como excepción, con motivo
         final reason = await _exceptionReason(context, e.message);
         if (reason == null || !context.mounted) return;
         await runAction(context, () => session.api.post('/assignments', {...body, 'force': true, 'reason': reason}),
@@ -303,7 +304,7 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
     }
   }
 
-  /// Pide el motivo de una excepción a la regla del ciclo anterior. Devuelve null si se cancela.
+  /// Pide el motivo de una excepción a las reglas del sorteo. Devuelve null si se cancela.
   Future<String?> _exceptionReason(BuildContext context, String message) async {
     final reason = TextEditingController();
     return showDialog<String>(
@@ -311,7 +312,7 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           icon: const Icon(Icons.warning_amber_rounded, color: AppColors.amber, size: 40),
-          title: const Text('Usó el parqueadero en el ciclo anterior'),
+          title: const Text('No cumple las reglas del sorteo'),
           content: SizedBox(
             width: 380,
             child: Column(

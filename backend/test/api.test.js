@@ -356,7 +356,8 @@ test('sorteo del próximo ciclo: preview, reglas de elegibilidad y confirmación
   const freeSpot = pv.data.proposal[0].parking_spot_id;
   const blocked = await api('POST', '/assignments', { cycle_id: next.id, resident_id: repeated, parking_spot_id: freeSpot });
   assert.equal(blocked.status, 409, JSON.stringify(blocked.data));
-  assert.equal(blocked.data.details.code, 'ciclo_anterior');
+  assert.equal(blocked.data.details.code, 'requiere_excepcion');
+  assert.ok(blocked.data.details.problems.includes('ciclo_anterior'));
   const noReason = await api('POST', '/assignments', { cycle_id: next.id, resident_id: repeated, parking_spot_id: freeSpot, force: true });
   assert.equal(noReason.status, 400);
   const forced = await api('POST', '/assignments', {
@@ -366,6 +367,15 @@ test('sorteo del próximo ciclo: preview, reglas de elegibilidad y confirmación
   assert.ok(String(forced.data.notes).includes('Caso de prueba'));
   const canceled = await api('POST', `/assignments/${forced.data.id}/cancel`, { reason: 'prueba' });
   assert.equal(canceled.status, 200, JSON.stringify(canceled.data));
+
+  // Quien tiene deuda tampoco recibe celda a mano, salvo excepción con motivo
+  const [debtor] = await sql`
+    SELECT r.id FROM residente r JOIN vehiculo v ON v.residente_id = r.id AND v.activo
+    WHERE r.deuda > 0 AND r.estado = 'activo' LIMIT 1`;
+  const withDebt = await api('POST', '/assignments', { cycle_id: next.id, resident_id: debtor.id, parking_spot_id: freeSpot });
+  assert.equal(withDebt.status, 409, JSON.stringify(withDebt.data));
+  assert.ok(withDebt.data.details.problems.includes('deuda'));
+  assert.ok(withDebt.data.error.includes('deuda de $'), withDebt.data.error);
 
   // Confirmar la propuesta tal como la vio el administrador
   const proposal = pv.data.proposal.map((p) => ({ resident_id: p.resident_id, parking_spot_id: p.parking_spot_id }));

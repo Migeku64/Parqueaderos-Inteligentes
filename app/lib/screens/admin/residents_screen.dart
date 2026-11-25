@@ -689,9 +689,18 @@ class _ResidentPickerState extends State<_ResidentPicker> {
                       ListTile(
                         title: Text(asStr(r['full_name'])),
                         subtitle: Text('Casa ${asStr(r['house'])} · '
-                            '${asList(r['vehicles']).map((v) => asStr(v['plate'])).join(', ')}'
-                            '${asDouble(r['debt']) > 0 ? ' · con deuda' : ''}'
-                            '${r['current_assignment'] != null ? ' · ya tiene celda' : ''}'),
+                            '${asList(r['vehicles']).map((v) => asStr(v['plate'])).join(', ')}'),
+                        // Avisos visibles antes de elegir: deuda (rojo) y celda ya asignada (amarillo)
+                        trailing: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (asDouble(r['debt']) > 0) Pill('Debe ${fmtMoney(r['debt'])}', color: AppColors.red),
+                            if (asDouble(r['debt']) > 0 && r['current_assignment'] != null) const SizedBox(height: 4),
+                            if (r['current_assignment'] != null) const Pill('Ya tiene celda', color: AppColors.amber),
+                          ],
+                        ),
                         enabled: asList(r['vehicles']).isNotEmpty,
                         onTap: () => Navigator.pop(context, r),
                       ),
