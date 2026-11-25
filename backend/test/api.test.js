@@ -411,6 +411,13 @@ test('reportes JSON y CSV, auditoría, dashboard y respaldo', async () => {
   const dl2 = await fetch(`${base}/backups/${b.data.id}/download`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
   assert.equal(dl2.status, 200);
   assert.ok((await dl2.json()).tables.residente.length >= 300);
+
+  // El mismo respaldo en Excel, para leerlo (una hoja por tabla, sin contraseñas cifradas)
+  const xl = await fetch(`${base}/backups/${b.data.id}/download?format=xlsx`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
+  assert.equal(xl.status, 200);
+  assert.ok(xl.headers.get('content-disposition').includes('.xlsx'));
+  const bytes = Buffer.from(await xl.arrayBuffer());
+  assert.equal(bytes.subarray(0, 2).toString(), 'PK');
 });
 
 test('ciclos: validación de fechas, cierre y activación', async () => {

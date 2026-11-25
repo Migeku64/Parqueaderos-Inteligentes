@@ -13,6 +13,7 @@ import { config } from '../config.js';
 import { notify } from '../events.js';
 import { emailConfig, emailEnabled, sendEmail } from './email.js';
 import { zipOne } from './zip.js';
+import { toXlsxBook } from './export.js';
 
 export const BACKUP_TABLES = [
   'vivienda',
@@ -73,15 +74,22 @@ async function emailBackup(id, fileName, json) {
   const zip = zipOne(fileName, json);
   const date = new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
   const text = `Respaldo del sistema del parqueadero del ${date}.\n\n`
-    + 'Se adjunta en un archivo .zip con toda la información (residentes, vehículos, celdas, ciclos, '
-    + 'asignaciones, usuarios, movimientos, notificaciones y auditoría). Guárdelo en un lugar seguro.\n\n'
+    + 'Se adjuntan dos archivos con toda la información (residentes, vehículos, celdas, ciclos, '
+    + 'asignaciones, usuarios, movimientos, notificaciones y auditoría):\n'
+    + '- El .xlsx se abre con Excel y tiene una hoja por tabla, para consultarlo.\n'
+    + '- El .zip contiene el respaldo técnico (JSON) para restaurar el sistema.\n'
+    + 'Guárdelos en un lugar seguro.\n\n'
     + 'Mensaje automático del Sistema de Gestión de Parqueaderos Comunitarios.';
   const r = await sendEmail({
     to: c.admins.map((email) => ({ email })),
     subject: `Respaldo del parqueadero · ${date}`,
     text,
     html: `<p>${text.replace(/\n/g, '<br>')}</p>`,
-    attachments: [{ name: fileName.replace(/\.json$/, '.zip'), content: zip.toString('base64') }],
+    // .xlsx para leerlo en Excel y .zip con el JSON para restaurar el sistema
+    attachments: [
+      { name: fileName.replace(/\.json$/, '.xlsx'), content: backupToXlsx(json).toString('base64') },
+      { name: fileName.replace(/\.json$/, '.zip'), content: zip.toString('base64') },
+    ],
   });
   if (r.ok) await sql`UPDATE respaldo SET enviado_correo_en = now() WHERE id = ${id}`;
   else console.warn('[backup] no se pudo enviar por correo:', r.error);
@@ -114,4 +122,62 @@ export async function backupContent(id) {
 export function backupPath(fileName) {
   if (!/^respaldo-[\w-]+\.json$/.test(fileName)) return null;
   return path.join(config.backupDir, fileName);
+}
+
+// ---------------------------------------------------------------------------
+// Respaldo en Excel: el mismo contenido, una hoja por tabla, para leerlo cómodamente.
+// (El JSON sigue siendo el formato para restaurar el sistema.)
+// ---------------------------------------------------------------------------
+const SHEET_NAMES = {
+  vivienda: 'Viviendas',
+  residente: 'Residentes',
+  vehiculo: 'Vehículos',
+  celda: 'Celdas',
+  ciclo: 'Ciclos',
+  asignacion: 'Asignaciones',
+  cuenta_usuario: 'Usuarios',
+  movimiento_vehiculo: 'Entradas y salidas',
+  notificacion: 'Notificaciones',
+  auditoria: 'Auditoría',
+};
+
+// Columnas que no se muestran en el Excel (las contraseñas cifradas no sirven para leer)
+const HIDDEN = /hash|token/i;
+const ISO_DT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+// Las columnas de la base no llevan tildes; en el Excel se muestran bien escritas
+const ACCENTS = {
+  numero: 'número', telefono: 'teléfono', contrasena: 'contraseña', ultimo: 'último', codigo: 'código',
+  fecha_sorteo: 'fecha del sorteo', sorteo: 'sorteo', metodo: 'método', vehiculo: 'vehículo', ano: 'año',
+  automatico: 'automático', tamano: 'tamaño', accion: 'acción', direccion: 'dirección', titulo: 'título',
+  leida: 'leída', notificacion: 'notificación', asignacion: 'asignación', ipa: 'IPA',
+};
+
+function label(col) {
+  const s = col.replace(/_id$/, '').split('_').map((w) => ACCENTS[w] ?? w).join(' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Convierte el JSON de un respaldo en un libro de Excel con una hoja por tabla. */
+export function backupToXlsx(json) {
+  const data = typeof json === 'string' || Buffer.isBuffer(json) ? JSON.parse(String(json)) : json;
+  const when = data.generated_at ? new Date(data.generated_at) : new Date();
+  const fecha = when.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+  const sheets = Object.entries(data.tables || {}).map(([table, rows]) => {
+    const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => !HIDDEN.test(k));
+    const clean = rows.map((r) => Object.fromEntries(keys.map((k) => {
+      const v = r[k];
+      if (v && typeof v === 'object') return [k, JSON.stringify(v)];
+      if (typeof v === 'string' && ISO_DT.test(v)) return [k, new Date(v)];
+      return [k, v];
+    })));
+    return {
+      title: `${SHEET_NAMES[table] || table} (${rows.length})`,
+      sheetName: SHEET_NAMES[table] || table,
+      note: `Respaldo del ${fecha} · tabla ${table}`,
+      columns: keys.map((k) => ({ key: k, label: label(k) })),
+      rows: clean,
+    };
+  });
+  return toXlsxBook(sheets);
 }

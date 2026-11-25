@@ -5,7 +5,7 @@ import { sql } from '../db.js';
 import { badRequest, notFound, intParam, toCsv } from '../http.js';
 import { ADMIN, ANY, requireRole } from '../auth.js';
 import { audit } from '../events.js';
-import { runBackup, backupPath, backupContent } from '../services/backup.js';
+import { runBackup, backupPath, backupContent, backupToXlsx } from '../services/backup.js';
 import { toPdf, toXlsx } from '../services/export.js';
 import { auditSummary, sendAuditReport } from '../services/auditReport.js';
 import { evaluateResidents } from '../services/draw.js';
@@ -154,6 +154,18 @@ export default function miscRoutes(r) {
     if (!rec) throw notFound('Respaldo no encontrado');
     // Primero la copia guardada en la base de datos (no depende del disco del servidor)
     const content = await backupContent(id);
+    // ?format=xlsx: el mismo respaldo en Excel, una hoja por tabla, para leerlo
+    if (content && ctx.query?.format === 'xlsx') {
+      const xlsx = backupToXlsx(content);
+      ctx.sent = true;
+      ctx.res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Length': xlsx.length,
+        'Content-Disposition': `attachment; filename="${rec.file_name.replace(/\.json$/, '.xlsx')}"`,
+      });
+      ctx.res.end(xlsx);
+      return;
+    }
     if (content) {
       ctx.sent = true;
       ctx.res.writeHead(200, {

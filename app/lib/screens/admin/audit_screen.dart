@@ -264,10 +264,30 @@ class _BackupsTabState extends State<_BackupsTab> {
                     '${b['backup_emailed_at'] != null ? ' · enviado por correo' : ''}'
                     '${b['error'] != null ? '\n${asStr(b['error'])}' : ''}'),
                 trailing: asStr(b['status']) == 'ok'
-                    ? IconButton(
+                    ? PopupMenuButton<String>(
                         tooltip: 'Descargar respaldo',
                         icon: const Icon(Icons.download_outlined),
-                        onPressed: () => _download(context, b),
+                        onSelected: (f) => _download(context, b, f),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'xlsx',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.grid_on),
+                              title: Text('Excel (para consultar)'),
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'json',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.data_object),
+                              title: Text('JSON (para restaurar)'),
+                            ),
+                          ),
+                        ],
                       )
                     : null,
               ),
@@ -278,12 +298,16 @@ class _BackupsTabState extends State<_BackupsTab> {
   }
 }
 
-/// Descarga un respaldo (JSON) y lo abre o lo deja guardado en el dispositivo.
-Future<void> _download(BuildContext context, Map<String, dynamic> b) async {
-  final bytes = await runAction(context, () => session.api.getBytes('/backups/${asInt(b['id'])}/download'));
+/// Descarga un respaldo: en Excel (una hoja por tabla, para consultarlo) o en JSON (para restaurar).
+Future<void> _download(BuildContext context, Map<String, dynamic> b, String format) async {
+  final bytes = await runAction(context,
+      () => session.api.getBytes('/backups/${asInt(b['id'])}/download', query: {if (format == 'xlsx') 'format': 'xlsx'}));
   if (bytes == null || !context.mounted) return;
+  final name = format == 'xlsx' ? asStr(b['file_name']).replaceAll('.json', '.xlsx') : asStr(b['file_name']);
   try {
-    final file = await AppFiles.save(asStr(b['file_name']), bytes);
+    final file = await AppFiles.save(name, bytes);
+    // El Excel se abre de una vez; el JSON solo se guarda (es para restaurar, no para leer)
+    if (format == 'xlsx') await AppFiles.open(file);
     if (context.mounted) showSnack(context, 'Respaldo guardado en ${file.path}');
   } catch (_) {
     if (context.mounted) showSnack(context, 'No se pudo guardar el respaldo en este dispositivo.', error: true);
