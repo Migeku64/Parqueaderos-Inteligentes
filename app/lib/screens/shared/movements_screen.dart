@@ -42,23 +42,13 @@ class _MovementsScreenState extends State<MovementsScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SizedBox(
-                width: 200,
-                child: TextField(
-                  decoration: inputDeco('Placa', icon: Icons.search),
-                  onSubmitted: (v) => setState(() => _plate = normalizePlate(v)),
-                  onChanged: (v) {
-                    if (v.isEmpty) setState(() => _plate = '');
-                  },
-                ),
-              ),
-              // Fecha: un día o todas las fechas. Son excluyentes: al elegir una se quita la otra
-              ChoiceChip(
-                avatar: Icon(Icons.event, size: 18, color: _allDays ? null : Theme.of(context).colorScheme.primary),
-                label: Text(_allDays ? 'Elegir fecha' : fmtDate(isoDate(_day))),
-                selected: !_allDays,
-                showCheckmark: false,
-                onSelected: (_) async {
+              // Igual que en Usuarios: botones redondeados en una fila y el buscador al final.
+              // La fecha nunca queda marcada; solo se marca Todos, Autorizados o Rechazados.
+              InputChip(
+                avatar: const Icon(Icons.event, size: 18),
+                label: Text(_allDays ? 'Todas las fechas' : fmtDate(isoDate(_day))),
+                tooltip: 'Elegir fecha',
+                onPressed: () async {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _day,
@@ -72,19 +62,26 @@ class _MovementsScreenState extends State<MovementsScreen> {
                     });
                   }
                 },
+                // La X aparece solo con un día elegido y vuelve a todas las fechas
+                onDeleted: _allDays ? null : () => setState(() => _allDays = true),
+                deleteButtonTooltipMessage: 'Ver todas las fechas',
               ),
-              ChoiceChip(
-                label: const Text('Todas las fechas'),
-                selected: _allDays,
-                onSelected: (_) => setState(() => _allDays = true),
-              ),
-              const SizedBox(width: 8),
               for (final f in const ['todos', 'autorizados', 'rechazados'])
                 ChoiceChip(
                   label: Text(f[0].toUpperCase() + f.substring(1)),
                   selected: _filter == f,
                   onSelected: (_) => setState(() => _filter = f),
                 ),
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  decoration: inputDeco('Buscar placa', icon: Icons.search),
+                  onSubmitted: (v) => setState(() => _plate = normalizePlate(v)),
+                  onChanged: (v) {
+                    if (v.isEmpty) setState(() => _plate = '');
+                  },
+                ),
+              ),
             ],
           ),
         ),
