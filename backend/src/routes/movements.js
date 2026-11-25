@@ -136,6 +136,14 @@ export default function movementRoutes(r) {
     const q = ctx.query;
     const plate = normalizePlate(q.plate);
     const limit = Math.min(Number(q.limit) || 200, 2000);
+    // Filtro Autorizados / Rechazados: se convierte a booleano aquí y solo se agrega si se pidió,
+    // para no depender de cómo el servidor de base de datos interpreta el texto 'true' / 'false'
+    const auth = ['true', '1', 'si', 'sí'].includes(String(q.authorized).toLowerCase())
+      ? true
+      : ['false', '0', 'no'].includes(String(q.authorized).toLowerCase())
+        ? false
+        : null;
+    const authFilter = auth === null ? sql`` : auth ? sql`AND m.autorizado IS TRUE` : sql`AND m.autorizado IS FALSE`;
     return sql`
       SELECT m.*, s.codigo AS spot_code, ua.usuario AS recorded_by_username,
              r.nombre_completo AS resident_name
@@ -147,7 +155,7 @@ export default function movementRoutes(r) {
       WHERE (${plate} = '' OR m.placa LIKE ${'%' + plate + '%'})
         AND (${q.from || null}::date IS NULL OR m.registrado_en >= ${q.from || null}::date)
         AND (${q.to || null}::date IS NULL OR m.registrado_en < ${q.to || null}::date + 1)
-        AND (${q.authorized ?? null}::boolean IS NULL OR m.autorizado = ${q.authorized ?? null}::boolean)
+        ${authFilter}
       ORDER BY m.registrado_en DESC, m.id DESC
       LIMIT ${limit}`;
   });

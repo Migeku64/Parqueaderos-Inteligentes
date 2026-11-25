@@ -294,6 +294,14 @@ test('entrada autorizada, doble entrada, salida e ingreso no autorizado', async 
   assert.equal(e4.data.authorized, true);
   assert.equal(e4.data.spot_code, free.spot_code);
   assert.equal((await api('POST', '/movements', { plate: 'FAM123', type: 'salida' }, 'guarda')).status, 201);
+
+  // Filtros de Movimientos: Autorizados solo trae permitidos y Rechazados solo rechazados
+  const soloOk = await api('GET', '/movements?authorized=true&limit=500');
+  assert.ok(soloOk.data.length > 0 && soloOk.data.every((m) => m.authorized === true));
+  const soloNo = await api('GET', '/movements?authorized=false&limit=500');
+  assert.ok(soloNo.data.length > 0 && soloNo.data.every((m) => m.authorized === false));
+  const todos = await api('GET', '/movements?limit=500');
+  assert.equal(todos.data.length, soloOk.data.length + soloNo.data.length);
   const [spot] = await sql`SELECT ocupada FROM celda WHERE codigo = ${free.spot_code}`;
   assert.equal(spot.is_occupied, false);
 
