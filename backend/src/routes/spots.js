@@ -121,9 +121,27 @@ export default function spotRoutes(r) {
     if (!s) throw notFound('Celda no encontrada');
     const [row] = await sql`DELETE FROM celda c WHERE c.id = ${id} AND ${SIN_HISTORIAL(sql)} RETURNING c.id`;
     if (!row) {
+      // Decir exactamente qué historial tiene, para que el administrador entienda por qué.
+      const [h] = await sql`
+        SELECT (SELECT count(*)::int FROM asignacion a WHERE a.celda_id = ${id}) AS asignaciones,
+               (SELECT c.nombre FROM asignacion a JOIN ciclo c ON c.id = a.ciclo_id
+                 WHERE a.celda_id = ${id} ORDER BY a.id DESC LIMIT 1) AS ultimo_ciclo,
+               (SELECT count(*)::int FROM movimiento_vehiculo m WHERE m.celda_id = ${id}) AS movimientos`;
+      const reasons = [];
+      if (s.is_occupied) reasons.push('está ocupada en este momento');
+      if (h.asignaciones) {
+        reasons.push(
+          `tuvo ${h.asignaciones === 1 ? '1 asignación' : `${h.asignaciones} asignaciones`}` +
+            (h.ultimo_ciclo ? ` (la última en el ciclo "${h.ultimo_ciclo}"), aunque se haya cancelado` : ''),
+        );
+      }
+      if (h.movimientos) {
+        reasons.push(`tiene ${h.movimientos === 1 ? '1 entrada o salida registrada' : `${h.movimientos} entradas y salidas registradas`}`);
+      }
       throw conflict(
-        `La celda ${s.code} no se puede eliminar porque está ocupada o tiene asignaciones o entradas registradas. ` +
-          'Desactívela para que no se use más.',
+        `La celda ${s.code} no se puede eliminar porque ${reasons.join(' y ') || 'tiene historial'}. ` +
+          'Ese historial se conserva para los reportes y la auditoría. ' +
+          'Si no la va a usar más, ábrala y toque «Desactivar celda».',
       );
     }
     await audit(null, ctx.user.id, 'eliminar_celda', 'celda', id, { code: s.code });

@@ -204,6 +204,7 @@ test('eliminar celdas: solo las que nunca se han usado', async () => {
   assert.ok(used, 'hay una celda asignada');
   const blocked = await api('DELETE', `/spots/${used.id}`);
   assert.equal(blocked.status, 409);
+  assert.match(blocked.data.error ?? blocked.data.message ?? JSON.stringify(blocked.data), /1 asignación .*Desactivar celda/s);
   // Por rango: elimina Z02 y Z03 y no toca las celdas con historial
   const range = await api('POST', '/spots/bulk-delete', { prefix: 'Z', from: 1, to: 3 });
   assert.equal(range.data.deleted, 2);
