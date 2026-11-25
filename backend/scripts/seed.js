@@ -6,6 +6,7 @@ import { sql } from '../src/db.js';
 import { hashPassword } from '../src/auth.js';
 import { confirmDraw } from '../src/services/draw.js';
 import { demoName } from './nombres_demo.js';
+import { demoPlate, demoVehicleInfo, demoVehicleType } from './placas_demo.js';
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -73,7 +74,7 @@ async function main() {
     }
 
     // Un residente por cada una de las demás casas (1 a 300): hay mucha más demanda que celdas
-    const letters = 'BCDFGHJKLMNPRSTVWXYZ';
+    const takenPlates = new Set(RESIDENTS.map((r) => r[7]).filter(Boolean));
     const usedHouses = new Set(RESIDENTS.map((r) => r[3]));
     let i = 0;
     for (let n = 1; n <= TOTAL_HOUSES; n++) {
@@ -88,8 +89,11 @@ async function main() {
         VALUES (${h.id}, ${name}, ${doc}, ${'31' + String(20000000 + i * 131).padStart(8, '0')},
                 ${i % 8 === 0 ? 85000 : 0}, ${i % 13 === 0 ? 1 : 0}, ${createdAt}) RETURNING id`;
       if (i % 5 !== 4) {
-        const plate = 'G' + letters[i % 20] + letters[Math.floor(i / 20) % 20] + String(100 + i);
-        await tx`INSERT INTO vehiculo (residente_id, placa, tipo) VALUES (${r.id}, ${plate}, ${i % 6 === 0 ? 'moto' : 'carro'})`;
+        const type = demoVehicleType(i);
+        const plate = demoPlate(i, type, takenPlates);
+        const v = demoVehicleInfo(i, type);
+        await tx`INSERT INTO vehiculo (residente_id, placa, tipo, marca, modelo, color)
+                 VALUES (${r.id}, ${plate}, ${type}, ${v.brand}, ${v.model}, ${v.color})`;
       }
       await tx`INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol, residente_id)
                VALUES (${'casa' + number}, ${name}, ${residentPw}, 'residente', ${r.id})`;
