@@ -169,7 +169,8 @@ class _AuditTabState extends State<_AuditTab> {
                     child: ListView.separated(
                       itemCount: list.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
+                      // Builder: cada fila toma los colores del tema actual al cambiar entre modo claro y oscuro
+                      itemBuilder: (_, i) => Builder(builder: (context) {
                         final a = list[i];
                         final details = a['details'];
                         return Container(
@@ -201,7 +202,7 @@ class _AuditTabState extends State<_AuditTab> {
                                     ),
                           ),
                         );
-                      },
+                      }),
                     ),
                   ),
           ),

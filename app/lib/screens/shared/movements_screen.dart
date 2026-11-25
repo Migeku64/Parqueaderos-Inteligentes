@@ -98,7 +98,9 @@ class _MovementsScreenState extends State<MovementsScreen> {
                       padding: const EdgeInsets.only(bottom: 24),
                       itemCount: list.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) => Container(color: Theme.of(context).cardColor, child: movementTile(list[i])),
+                      itemBuilder: (_, i) => Builder(
+                        builder: (context) => Container(color: Theme.of(context).cardColor, child: movementTile(list[i])),
+                      ),
                     ),
                   ),
           ),

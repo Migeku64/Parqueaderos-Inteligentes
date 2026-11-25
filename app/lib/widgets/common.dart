@@ -329,13 +329,16 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // En modo oscuro el azul institucional casi no se ve sobre el fondo: se usa el azul claro
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final c = dark && color == AppColors.blue ? DarkColors.primary : color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: soft ?? color.withAlpha(28),
+        color: soft ?? c.withAlpha(dark ? 40 : 28),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+      child: Text(text, style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12)),
     );
   }
 }

@@ -54,7 +54,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: items.length,
-              itemBuilder: (context, i) {
+              // Builder: cada tarjeta toma los colores del tema actual al cambiar entre modo claro y oscuro
+              itemBuilder: (_, i) => Builder(builder: (context) {
                 final n = items[i];
                 final unread = n['read_at'] == null;
                 final kind = asStr(n['kind']);
@@ -79,7 +80,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         : null,
                   ),
                 );
-              },
+              }),
             ),
           );
         },
