@@ -87,6 +87,8 @@ export const COLUMNS = {
   performed_at: 'realizado_en',
   details: 'detalles',
   file_name: 'nombre_archivo',
+  backup_emailed_at: 'enviado_correo_en',
+  in_cloud: 'en_la_nube',
   size_bytes: 'tamano_bytes',
   trigger: 'disparador',
   emailed_at: 'correo_enviado_en',

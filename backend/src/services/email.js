@@ -53,7 +53,7 @@ export function renderEmail({ name, title, body }) {
 }
 
 /** Envía un correo con la API de Brevo. Devuelve { ok, status, error }. */
-export async function sendEmail({ to, subject, html, text }) {
+export async function sendEmail({ to, subject, html, text, attachments }) {
   const c = emailConfig();
   if (!c.apiKey || !c.from) return { ok: false, error: 'Correo no configurado (BREVO_API_KEY / EMAIL_FROM)' };
   let recipients = to.filter((r) => r && r.email);
@@ -72,6 +72,8 @@ export async function sendEmail({ to, subject, html, text }) {
         subject,
         htmlContent: html,
         textContent: text,
+        // Adjuntos: [{ name, content (base64) }]
+        ...(attachments?.length ? { attachment: attachments } : {}),
       }),
       signal: AbortSignal.timeout(15000),
     });

@@ -19,6 +19,14 @@ void main() {
     expect(isoDate(DateTime(2026, 1, 5)), '2026-01-05');
   });
 
+  test('valores vacíos y nombres de rol', () {
+    expect(fmtDate(null), '—');
+    expect(fmtDateTime(''), '—');
+    expect(roleLabel('guarda'), 'Guarda de seguridad');
+    expect(roleLabel('residente'), 'Residente');
+    expect(fmtMoney(-2500), '-\$2.500');
+  });
+
   test('lectura segura de JSON', () {
     expect(asInt('14.000'), 14);
     expect(asDouble('14.500'), 14.5);

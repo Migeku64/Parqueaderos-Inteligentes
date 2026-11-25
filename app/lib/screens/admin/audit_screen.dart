@@ -259,12 +259,34 @@ class _BackupsTabState extends State<_BackupsTab> {
                 title: Text(asStr(b['file_name'])),
                 subtitle: Text('${fmtDateTime(b['created_at'])} · ${asStr(b['trigger'])} · '
                     '${(asInt(b['size_bytes']) / 1024).toStringAsFixed(1)} KB'
+                    // Dónde quedó la copia: en la base de datos en la nube y/o en el correo de la administración
+                    '${asBool(b['in_cloud']) ? ' · guardado en la nube' : ''}'
+                    '${b['backup_emailed_at'] != null ? ' · enviado por correo' : ''}'
                     '${b['error'] != null ? '\n${asStr(b['error'])}' : ''}'),
+                trailing: asStr(b['status']) == 'ok'
+                    ? IconButton(
+                        tooltip: 'Descargar respaldo',
+                        icon: const Icon(Icons.download_outlined),
+                        onPressed: () => _download(context, b),
+                      )
+                    : null,
               ),
             ),
         ],
       ),
     );
+  }
+}
+
+/// Descarga un respaldo (JSON) y lo abre o lo deja guardado en el dispositivo.
+Future<void> _download(BuildContext context, Map<String, dynamic> b) async {
+  final bytes = await runAction(context, () => session.api.getBytes('/backups/${asInt(b['id'])}/download'));
+  if (bytes == null || !context.mounted) return;
+  try {
+    final file = await AppFiles.save(asStr(b['file_name']), bytes);
+    if (context.mounted) showSnack(context, 'Respaldo guardado en ${file.path}');
+  } catch (_) {
+    if (context.mounted) showSnack(context, 'No se pudo guardar el respaldo en este dispositivo.', error: true);
   }
 }
 

@@ -496,9 +496,17 @@ class _DrawScreenState extends State<DrawScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'ponderado', label: Text('Ponderado (rifa)'), icon: Icon(Icons.casino)),
-                      ButtonSegment(value: 'prioridad', label: Text('Por prioridad'), icon: Icon(Icons.sort)),
+                    // En el celular sin íconos, para que los dos modos quepan en una línea
+                    showSelectedIcon: MediaQuery.of(context).size.width >= 600,
+                    segments: [
+                      ButtonSegment(
+                          value: 'ponderado',
+                          label: const Text('Ponderado (rifa)'),
+                          icon: MediaQuery.of(context).size.width >= 600 ? const Icon(Icons.casino) : null),
+                      ButtonSegment(
+                          value: 'prioridad',
+                          label: const Text('Por prioridad'),
+                          icon: MediaQuery.of(context).size.width >= 600 ? const Icon(Icons.sort) : null),
                     ],
                     selected: {_mode},
                     onSelectionChanged: (s) => setState(() => _mode = s.first),
@@ -576,28 +584,38 @@ class _DrawScreenState extends State<DrawScreen> {
   List<Widget> _previewWidgets(Map<String, dynamic> p) {
     final waitlist = asList(p['waitlist']);
     final excluded = asList(p['excluded']);
+    // En el celular las tres cifras van en una fila de tarjetas compactas
+    final narrow = MediaQuery.of(context).size.width < 600;
+    final stats = [
+      StatCard(
+          label: 'Celdas disponibles',
+          value: '${asInt(p['spots_available'])}',
+          icon: Icons.local_parking,
+          compact: narrow),
+      StatCard(
+          label: 'Residentes elegibles',
+          value: '${asInt(p['eligible_count'])}',
+          icon: Icons.how_to_reg,
+          color: AppColors.green,
+          compact: narrow),
+      StatCard(
+          label: 'No elegibles',
+          value: '${excluded.length}',
+          icon: Icons.person_off,
+          color: AppColors.red,
+          compact: narrow),
+    ];
     return [
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Wrap(
-          children: [
-            SizedBox(
-                width: 250,
-                child: StatCard(
-                    label: 'Celdas disponibles', value: '${asInt(p['spots_available'])}', icon: Icons.local_parking)),
-            SizedBox(
-                width: 250,
-                child: StatCard(
-                    label: 'Residentes elegibles',
-                    value: '${asInt(p['eligible_count'])}',
-                    icon: Icons.how_to_reg,
-                    color: AppColors.green)),
-            SizedBox(
-                width: 250,
-                child: StatCard(
-                    label: 'No elegibles', value: '${excluded.length}', icon: Icons.person_off, color: AppColors.red)),
-          ],
-        ),
+        child: narrow
+            ? IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [for (final s in stats) Expanded(child: s)],
+                ),
+              )
+            : Wrap(children: [for (final s in stats) SizedBox(width: 250, child: s)]),
       ),
       SectionCard(
         title: 'Propuesta de asignación (${_proposal.length})',

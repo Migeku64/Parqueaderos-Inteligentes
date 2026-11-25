@@ -43,6 +43,8 @@ export const config = {
   backupDir: path.resolve(root, env.BACKUP_DIR || 'backups'),
   backupIntervalHours: Number(env.BACKUP_INTERVAL_HOURS || 24),
   backupKeep: Number(env.BACKUP_KEEP || 30),
+  // Enviar cada respaldo por correo a EMAIL_ADMINS (si el correo está configurado). BACKUP_EMAIL=false lo apaga
+  backupEmail: (env.BACKUP_EMAIL ?? 'true') !== 'false',
   plateReaderKey: env.PLATE_READER_KEY || '',
   houseMin: Number(env.HOUSE_MIN || 1),
   houseMax: Number(env.HOUSE_MAX || 300),

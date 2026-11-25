@@ -4,6 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 process.env.NODE_ENV = 'test';
@@ -401,6 +402,15 @@ test('reportes JSON y CSV, auditoría, dashboard y respaldo', async () => {
   const dl = await fetch(`${base}/backups/${b.data.id}/download`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
   const json = await dl.json();
   assert.ok(json.tables.residente.length >= 300);
+
+  // El respaldo queda guardado en la base de datos: se puede descargar aunque se borre
+  // el disco del servidor (como pasa en Render gratuito al reiniciarse)
+  await rm(process.env.BACKUP_DIR, { recursive: true, force: true });
+  const list = await api('GET', '/backups');
+  assert.equal(list.data.find((x) => x.id === b.data.id).in_cloud, true);
+  const dl2 = await fetch(`${base}/backups/${b.data.id}/download`, { headers: { Authorization: `Bearer ${tokens.admin}` } });
+  assert.equal(dl2.status, 200);
+  assert.ok((await dl2.json()).tables.residente.length >= 300);
 });
 
 test('ciclos: validación de fechas, cierre y activación', async () => {

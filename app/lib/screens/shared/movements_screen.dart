@@ -79,7 +79,8 @@ class _MovementsScreenState extends State<MovementsScreen> {
                   onSelected: (_) => setState(() => _filter = f),
                 ),
               SizedBox(
-                width: 340,
+                // En el celular ocupa todo el ancho disponible (sin salirse de la pantalla)
+                width: MediaQuery.of(context).size.width < 600 ? MediaQuery.of(context).size.width - 32 : 340,
                 child: TextField(
                   decoration: inputDeco('Buscar placa', icon: Icons.search),
                   onSubmitted: (v) => setState(() => _plate = normalizePlate(v)),

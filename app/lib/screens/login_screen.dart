@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
@@ -21,8 +23,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   String? _error;
 
+  /// Se activa si el ingreso tarda: el servidor gratuito de Render "duerme" y tarda en despertar
+  bool _slow = false;
+  Timer? _slowTimer;
+
   @override
   void dispose() {
+    _slowTimer?.cancel();
     _user.dispose();
     _pass.dispose();
     super.dispose();
@@ -36,6 +43,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _slow = false;
+    });
+    // Si en 4 segundos no responde, se avisa que el servidor está despertando
+    _slowTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _busy) setState(() => _slow = true);
     });
     try {
       await session.login(_user.text, _pass.text);
@@ -44,7 +56,13 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = 'Error inesperado: $e');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _slowTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _slow = false;
+        });
+      }
     }
   }
 
@@ -222,6 +240,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                     style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
                           ),
                         ),
+                        if (_slow) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            decoration: BoxDecoration(
+                                color: AppColors.amberSoft, borderRadius: BorderRadius.circular(AppRadius.tile)),
+                            child: const Text(
+                              'Conectando con el servidor en la nube… Si estuvo inactivo, puede tardar hasta un minuto en despertar.',
+                              style: TextStyle(color: AppColors.text),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         ListenableBuilder(
                           listenable: session,

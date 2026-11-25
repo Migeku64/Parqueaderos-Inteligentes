@@ -5,7 +5,7 @@ import { sql } from '../db.js';
 import { badRequest, notFound, intParam, toCsv } from '../http.js';
 import { ADMIN, ANY, requireRole } from '../auth.js';
 import { audit } from '../events.js';
-import { runBackup, backupPath } from '../services/backup.js';
+import { runBackup, backupPath, backupContent } from '../services/backup.js';
 import { toPdf, toXlsx } from '../services/export.js';
 import { auditSummary, sendAuditReport } from '../services/auditReport.js';
 import { evaluateResidents } from '../services/draw.js';
@@ -136,7 +136,10 @@ export default function miscRoutes(r) {
   );
 
   // ---------- Respaldos ----------
-  r.get('/backups', ADMIN, async () => sql`SELECT * FROM respaldo ORDER BY creado_en DESC LIMIT 100`);
+  r.get('/backups', ADMIN, async () => sql`
+    SELECT id, nombre_archivo, tamano_bytes, estado, error, disparador, creado_en, enviado_correo_en,
+           contenido IS NOT NULL AS en_la_nube
+    FROM respaldo ORDER BY creado_en DESC LIMIT 100`);
 
   r.post('/backups', ADMIN, async (ctx) => {
     const rec = await runBackup('manual');
@@ -146,8 +149,22 @@ export default function miscRoutes(r) {
   });
 
   r.get('/backups/:id/download', ADMIN, async (ctx) => {
-    const [rec] = await sql`SELECT * FROM respaldo WHERE id = ${intParam(ctx.params.id)} AND estado = 'ok'`;
-    const file = rec && backupPath(rec.file_name);
+    const id = intParam(ctx.params.id);
+    const [rec] = await sql`SELECT id, nombre_archivo FROM respaldo WHERE id = ${id} AND estado = 'ok'`;
+    if (!rec) throw notFound('Respaldo no encontrado');
+    // Primero la copia guardada en la base de datos (no depende del disco del servidor)
+    const content = await backupContent(id);
+    if (content) {
+      ctx.sent = true;
+      ctx.res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': content.length,
+        'Content-Disposition': `attachment; filename="${rec.file_name}"`,
+      });
+      ctx.res.end(content);
+      return;
+    }
+    const file = backupPath(rec.file_name);
     if (!file) throw notFound('Respaldo no encontrado');
     try {
       const { size } = await stat(file);

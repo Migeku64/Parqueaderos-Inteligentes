@@ -202,3 +202,7 @@ CREATE TABLE IF NOT EXISTS respaldo (
   disparador      VARCHAR(20)  NOT NULL DEFAULT 'automatico' CHECK (disparador IN ('automatico','manual')),
   creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+-- Copia del respaldo dentro de la base gestionada (Neon): no se pierde si el servidor de la API se reinicia
+ALTER TABLE respaldo ADD COLUMN IF NOT EXISTS contenido BYTEA;
+ALTER TABLE respaldo ADD COLUMN IF NOT EXISTS enviado_correo_en TIMESTAMPTZ;
