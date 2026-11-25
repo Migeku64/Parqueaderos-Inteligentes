@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/format.dart';
 import '../core/navigation.dart';
@@ -41,6 +42,11 @@ class _HomeShellState extends State<HomeShell> {
 
   /// Filtro con el que se abre la sección actual cuando se llega desde el panel
   String? _navFilter;
+
+  /// Secciones visitadas, para que el botón Atrás vuelva a la anterior (como un navegador)
+  final List<(int, String?)> _history = [];
+  final _scaffold = GlobalKey<ScaffoldState>();
+  DateTime? _lastBack;
 
   @override
   void initState() {
@@ -86,10 +92,57 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  void _go(int i) => setState(() {
+  void _go(int i) => _open(i, null);
+
+  /// Cambia de sección y recuerda la anterior en el historial
+  void _open(int i, String? filter) {
+    if (i == _index && filter == _navFilter) return;
+    setState(() {
+      _history.add((_index, _navFilter));
+      if (_history.length > 30) _history.removeAt(0);
+      _index = i;
+      _navFilter = filter;
+    });
+  }
+
+  /// Botón Atrás del celular:
+  /// 1. cierra el menú si está abierto; 2. vuelve a la sección anterior;
+  /// 3. desde otra sección vuelve a la primera; 4. en la primera hay que
+  ///    presionar Atrás dos veces para salir.
+  void _back() {
+    final sc = _scaffold.currentState;
+    if (sc != null && sc.isDrawerOpen) {
+      sc.closeDrawer();
+      return;
+    }
+    if (_history.isNotEmpty) {
+      final (i, f) = _history.removeLast();
+      setState(() {
         _index = i;
+        _navFilter = f;
+      });
+      return;
+    }
+    if (_index != 0) {
+      setState(() {
+        _index = 0;
         _navFilter = null;
       });
+      return;
+    }
+    {
+      final now = DateTime.now();
+      if (_lastBack != null && now.difference(_lastBack!) < const Duration(seconds: 2)) {
+        SystemNavigator.pop();
+      } else {
+        _lastBack = now;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+              content: Text('Presione atrás otra vez para salir'), duration: Duration(seconds: 2)));
+      }
+    }
+  }
 
   /// Atiende los pedidos de navegación (por ejemplo, al tocar una tarjeta del panel)
   void _onNav() {
@@ -98,10 +151,7 @@ class _HomeShellState extends State<HomeShell> {
     shellNav.value = null;
     final i = _dests.indexWhere((d) => d.label == req.section);
     if (i < 0 || !mounted) return;
-    setState(() {
-      _index = i;
-      _navFilter = req.filter;
-    });
+    _open(i, req.filter);
   }
 
   @override
@@ -113,7 +163,8 @@ class _HomeShellState extends State<HomeShell> {
 
     final body = KeyedSubtree(key: ValueKey('$_index-$_navFilter'), child: dest.builder());
 
-    return Scaffold(
+    final scaffold = Scaffold(
+      key: _scaffold,
       appBar: AppBar(
         foregroundColor: Colors.white,
         titleSpacing: wide ? 16 : 0,
@@ -236,6 +287,16 @@ class _HomeShellState extends State<HomeShell> {
               ],
             )
           : null,
+    );
+
+    // Botón Atrás del celular: la app lo maneja en vez de cerrarse de una vez.
+    // (Inicio y Recientes los controla el sistema del teléfono; en el PC no aplica.)
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: scaffold,
     );
   }
 }

@@ -33,6 +33,7 @@ class DashboardScreen extends StatelessWidget {
             color: AppColors.green,
             footnote: 'Ocupación ${asInt(d['occupancy_rate'])}%',
             tooltip: 'Ver las celdas libres en el mapa',
+            compact: !wide,
             onTap: () => goToSection('Mapa', filter: 'libre'),
           ),
           StatCard(
@@ -41,6 +42,7 @@ class DashboardScreen extends StatelessWidget {
             icon: Icons.directions_car,
             color: AppColors.red,
             tooltip: 'Ver las celdas ocupadas en el mapa',
+            compact: !wide,
             onTap: () => goToSection('Mapa', filter: 'ocupada'),
           ),
           StatCard(
@@ -50,6 +52,7 @@ class DashboardScreen extends StatelessWidget {
             color: AppColors.blue,
             footnote: '${asInt(today['exits'])} salidas',
             tooltip: 'Ver las entradas y salidas de hoy',
+            compact: !wide,
             onTap: () => goToSection('Movimientos', filter: 'todos'),
           ),
           StatCard(
@@ -58,6 +61,7 @@ class DashboardScreen extends StatelessWidget {
             icon: Icons.gpp_bad_outlined,
             color: AppColors.amber,
             tooltip: 'Ver los ingresos rechazados de hoy',
+            compact: !wide,
             onTap: () => goToSection('Movimientos', filter: 'rechazados'),
           ),
         ];
@@ -70,13 +74,29 @@ class DashboardScreen extends StatelessWidget {
               const PageHeader(title: 'Panel de administración', subtitle: 'Resumen en tiempo real'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: GridView.count(
-                  crossAxisCount: wide ? 4 : 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: wide ? 2.2 : 1.15,
-                  children: cards,
-                ),
+                child: wide
+                    ? GridView.count(
+                        crossAxisCount: 4,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        childAspectRatio: 2.2,
+                        children: cards,
+                      )
+                    // Celular: filas de dos tarjetas del mismo alto, que crecen si la letra del teléfono es grande
+                    : Column(
+                        children: [
+                          for (var i = 0; i < cards.length; i += 2)
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(child: cards[i]),
+                                  Expanded(child: i + 1 < cards.length ? cards[i + 1] : const SizedBox()),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
               ),
               SectionCard(
                 title: 'Ciclo actual',

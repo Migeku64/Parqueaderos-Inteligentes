@@ -147,27 +147,31 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        if (subtitle != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(subtitle!, style: const TextStyle(color: AppColors.muted)),
+          ),
+      ],
+    );
+    // En el celular los botones van debajo del título para que no se amontonen
+    final narrow = MediaQuery.of(context).size.width < 600;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: narrow && actions.isNotEmpty
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                if (subtitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(subtitle!, style: const TextStyle(color: AppColors.muted)),
-                  ),
+                texts,
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: actions),
               ],
-            ),
-          ),
-          ...actions,
-        ],
-      ),
+            )
+          : Row(children: [Expanded(child: texts), ...actions]),
     );
   }
 }
@@ -182,6 +186,7 @@ class StatCard extends StatefulWidget {
     this.footnote,
     this.onTap,
     this.tooltip,
+    this.compact = false,
   });
 
   final String label;
@@ -193,6 +198,9 @@ class StatCard extends StatefulWidget {
   /// Si se indica, la tarjeta se puede tocar (por ejemplo, para abrir el mapa)
   final VoidCallback? onTap;
   final String? tooltip;
+
+  /// Versión para celular: ícono arriba y textos debajo
+  final bool compact;
 
   @override
   State<StatCard> createState() => _StatCardState();
@@ -234,7 +242,9 @@ class _StatCardState extends State<StatCard> {
             splashColor: w.color.withAlpha(40),
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(
+              child: w.compact
+                  ? _compact(w)
+                  : Row(
                 children: [
                   AnimatedContainer(
                     duration: duration,
@@ -277,6 +287,41 @@ class _StatCardState extends State<StatCard> {
       card = Tooltip(message: w.tooltip!, waitDuration: const Duration(milliseconds: 500), child: card);
     }
     return card;
+  }
+
+  /// Versión para celular: ícono arriba y número, nombre y detalle debajo, siempre del mismo tamaño.
+  Widget _compact(StatCard w) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(color: w.color.withAlpha(30), shape: BoxShape.circle),
+              child: Icon(w.icon, color: w.color, size: 22),
+            ),
+            const Spacer(),
+            if (w.onTap != null) const Icon(Icons.chevron_right, color: AppColors.muted),
+          ],
+        ),
+        const SizedBox(height: 10),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(w.value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(height: 2),
+        Text(w.label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+        if (w.footnote != null)
+          Text(w.footnote!,
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+      ],
+    );
   }
 }
 

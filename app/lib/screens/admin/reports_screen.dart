@@ -128,6 +128,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.of(context).size.width < 600;
     return Column(
       children: [
         PageHeader(
@@ -171,7 +172,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: 260,
+                // En el celular el tipo de reporte ocupa todo el ancho
+                width: narrow ? MediaQuery.of(context).size.width - 32 : 260,
                 child: LabeledDropdown<String>(
                   label: 'Tipo de reporte',
                   value: _type,
@@ -191,7 +193,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
               if (_type != 'ciclos')
                 SizedBox(
-                  width: 140,
+                  width: narrow ? 120 : 140,
                   child: TextField(
                     controller: _spot,
                     decoration: inputDeco('Celda', hint: 'D25'),
@@ -230,7 +232,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         style: const TextStyle(color: AppColors.muted)),
                   ),
                   Expanded(
-                    child: Card(
+                    child: narrow
+                        ? _cards(cols, rows)
+                        : Card(
                       elevation: 0,
                       margin: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: SingleChildScrollView(
@@ -259,6 +263,43 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// En el celular cada fila del reporte es una tarjeta: la primera columna como título
+  /// y las demás como «Columna: valor», así no hay que desplazarse de lado.
+  Widget _cards(List<Map<String, dynamic>> cols, List<Map<String, dynamic>> rows) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: rows.length,
+      itemBuilder: (_, i) => Builder(builder: (context) {
+        final r = rows[i];
+        final first = asStr(cols.first['key']);
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_cell(first, r[first]), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                for (final c in cols.skip(1))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text.rich(TextSpan(children: [
+                      TextSpan(
+                          text: '${asStr(c['label'])}: ',
+                          style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+                      TextSpan(text: _cell(asStr(c['key']), r[asStr(c['key'])])),
+                    ])),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }),
     );
   }
 
