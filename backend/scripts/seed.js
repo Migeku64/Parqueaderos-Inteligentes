@@ -7,6 +7,7 @@ import { hashPassword } from '../src/auth.js';
 import { confirmDraw } from '../src/services/draw.js';
 import { demoName } from './nombres_demo.js';
 import { demoPlate, demoVehicleInfo, demoVehicleType } from './placas_demo.js';
+import { demoDebt } from './deudas_demo.js';
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -87,7 +88,7 @@ async function main() {
       const [r] = await tx`
         INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, deuda, puntaje_administrativo, creado_en)
         VALUES (${h.id}, ${name}, ${doc}, ${'31' + String(20000000 + i * 131).padStart(8, '0')},
-                ${i % 8 === 0 ? 85000 : 0}, ${i % 13 === 0 ? 1 : 0}, ${createdAt}) RETURNING id`;
+                ${i % 8 === 0 ? demoDebt(i) : 0}, ${i % 13 === 0 ? 1 : 0}, ${createdAt}) RETURNING id`;
       if (i % 5 !== 4) {
         const type = demoVehicleType(i);
         const plate = demoPlate(i, type, takenPlates);
