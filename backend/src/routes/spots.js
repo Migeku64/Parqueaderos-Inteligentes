@@ -8,7 +8,7 @@ import { broadcast } from '../ws.js';
 export async function listSpots(db = sql) {
   return db`
     SELECT s.id, s.codigo, s.para_discapacidad, s.activo, s.ocupada, s.observaciones,
-           a.id AS asignacion_id, a.residente_id, r.nombre_completo AS resident_name,
+           a.id AS asignacion_id, a.residente_id, r.nombre_completo AS resident_name, r.deuda AS resident_debt,
            CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house,
            v.placa,
            CASE WHEN NOT s.activo THEN 'inactiva'
@@ -66,6 +66,8 @@ export default function spotRoutes(r) {
         mine: s.resident_id === ctx.user.resident_id,
       }));
     }
+    // La deuda de quien tiene la celda solo la ve la administración
+    if (ctx.user.role !== 'admin') return spots.map(({ resident_debt, ...s }) => s);
     return spots;
   });
 

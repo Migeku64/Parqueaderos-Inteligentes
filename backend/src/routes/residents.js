@@ -145,7 +145,22 @@ export default function residentRoutes(r) {
         WHERE id = ${id}`;
       await audit(tx, ctx.user.id, 'editar_residente', 'residente', id, b);
     });
-    return getResident(id);
+    const updated = await getResident(id);
+    // Si alguien que tiene celda en el ciclo actual entra en deuda, se avisa a la administración.
+    // La app no le quita la celda: eso lo decide el administrador según el reglamento del conjunto.
+    if (Number(current.debt) <= 0 && Number(updated.debt) > 0 && updated.current_assignment) {
+      const money = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(updated.debt));
+      await notify({
+        role: 'admin',
+        title: 'Residente con celda entró en deuda',
+        body:
+          `${updated.full_name} (Casa ${updated.house}, celda ${updated.current_assignment.spot_code}) ` +
+          `tiene ahora una deuda de $${money}. Conserva la celda hasta el fin del ciclo; si el reglamento ` +
+          'lo exige, puede cancelar la asignación desde el Mapa.',
+        kind: 'alerta',
+      });
+    }
+    return updated;
   });
 
   // Marcar al día: la administración verificó el pago y deja la deuda en 0.

@@ -207,6 +207,20 @@ test('mapa de celdas y resumen', async () => {
   assert.equal(resSpots.data[0].resident_name, undefined, 'el residente no ve datos de otros');
   const bulk = await api('POST', '/spots/bulk', { prefix: 'M', from: 1, to: 3 });
   assert.equal(bulk.data.created, 3);
+  // Si quien tiene celda entra en deuda: aviso a la administración y la deuda se ve en el mapa (solo admin)
+  const assigned = spots.data.find((s) => s.residente_id ?? s.resident_id);
+  const rid = assigned.residente_id ?? assigned.resident_id;
+  const prev = Number((await api('GET', `/residents/${rid}`)).data.debt);
+  if (prev > 0) await api('PUT', `/residents/${rid}`, { debt: 0 });
+  await api('PUT', `/residents/${rid}`, { debt: 218200 });
+  const [aviso] = await sql`SELECT cuerpo FROM notificacion WHERE titulo = 'Residente con celda entró en deuda' ORDER BY id DESC LIMIT 1`;
+  assert.ok(aviso, 'se avisa a la administración');
+  assert.match(aviso.body ?? aviso.cuerpo, new RegExp(`celda ${assigned.code}.*218\\.200`));
+  const adminMap = await api('GET', '/spots');
+  assert.equal(Number(adminMap.data.find((s) => s.id === assigned.id).resident_debt), 218200);
+  const guardMap = await api('GET', '/spots', null, 'guarda');
+  assert.equal(guardMap.data.find((s) => s.id === assigned.id).resident_debt, undefined);
+  await api('PUT', `/residents/${rid}`, { debt: prev });
 });
 
 test('eliminar celdas: sin historial de una vez; con historial solo confirmando', async () => {

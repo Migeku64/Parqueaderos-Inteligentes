@@ -184,6 +184,15 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                 Text('Casa ${asStr(s['house'])}', style: const TextStyle(color: AppColors.muted)),
                 const SizedBox(height: 8),
                 if (s['plate'] != null) PlateBadge(asStr(s['plate'])),
+                if (asDouble(s['resident_debt']) > 0) ...[
+                  const SizedBox(height: 8),
+                  Pill('Debe ${fmtMoney(s['resident_debt'])}', color: AppColors.red),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Conserva la celda hasta el fin del ciclo. Si el reglamento lo exige, use Cancelar asignación.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ],
               ] else
                 const Text('Sin asignación en el ciclo actual'),
               if (user.isAdmin) ...[
@@ -557,8 +566,11 @@ class _SpotTileState extends State<_SpotTile> {
     final Color textColor = dark ? Colors.white.withAlpha(230) : AppColors.text;
     final Color borderColor = mine ? AppColors.blueLight : style.color;
     final plate = spot['plate'] != null ? asStr(spot['plate']) : null;
+    // Solo la administración recibe la deuda de quien tiene la celda
+    final debt = asDouble(spot['resident_debt']);
     final tip = '${asStr(spot['code'])} · ${style.label}${plate != null ? ' · $plate' : ''}'
-        '${asBool(spot['is_disabled_spot']) ? ' · Discapacidad' : ''}';
+        '${asBool(spot['is_disabled_spot']) ? ' · Discapacidad' : ''}'
+        '${debt > 0 ? ' · Debe ${fmtMoney(debt)}' : ''}';
     final radius = BorderRadius.circular(AppRadius.tile);
 
     return Tooltip(
@@ -601,6 +613,12 @@ class _SpotTileState extends State<_SpotTile> {
                           Padding(
                             padding: const EdgeInsets.only(left: 2),
                             child: Icon(Icons.accessible, size: 16, color: dark ? AppColors.blueLight : AppColors.blue),
+                          ),
+                        // Quien tiene la celda entró en deuda
+                        if (debt > 0)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 2),
+                            child: Icon(Icons.money_off, size: 16, color: AppColors.red),
                           ),
                       ],
                     ),
