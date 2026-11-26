@@ -43,6 +43,12 @@ class ResidentDrawsScreen extends StatelessWidget {
                       _title('PRÓXIMO SORTEO'),
                       _box(d['next_draw_date'] == null ? 'Por definir' : fmtLongDate(d['next_draw_date']),
                           color: const Color(0xFFDADADA), size: 16),
+                      if (countdown(d['next_draw_date']) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(countdown(d['next_draw_date'])!,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                        ),
                       const SizedBox(height: 14),
                       _title('LOTE EN USO'),
                       _box(current == null ? '—' : asStr(current['spot_code']),
@@ -134,7 +140,26 @@ class ResidentDrawsScreen extends StatelessWidget {
               Pill('Ciclos usados: ${asInt(c['cu'])}'),
             ],
           ),
+          const SizedBox(height: 12),
+          const Text('¿Por qué tiene este puntaje?', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          for (final line in ipaReasons(c))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('•  '),
+                  Expanded(child: Text(line)),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
+          Text(
+              'Cuenta: (${asInt(c['te'])} + ${asInt(c['pa'])} + ${asInt(c['hn'])}) / (${asInt(c['cu'])} + 1) '
+              '= ${asDouble(p['ipa']).toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
           const Text('IPA = (Te + Pa + Hn) / (Cu + 1). Mientras más tiempo espere, mayor es su prioridad.',
               style: TextStyle(color: AppColors.muted, fontSize: 12)),
         ],
@@ -156,4 +181,25 @@ class ResidentDrawsScreen extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.w900, fontSize: size, color: Colors.black)),
       );
+}
+
+/// Explica en palabras cada parte del IPA del residente.
+List<String> ipaReasons(Map<String, dynamic> c) {
+  final te = asInt(c['te']);
+  final pa = asInt(c['pa']);
+  final hn = asInt(c['hn']);
+  final cu = asInt(c['cu']);
+  String plural(int n, String one, String many) => n == 1 ? one : many;
+  return [
+    te == 0
+        ? 'Aún no completa un mes de espera (suma 0).'
+        : 'Lleva $te ${plural(te, 'mes', 'meses')} esperando desde su último uso o su registro (suma $te).',
+    pa == 0
+        ? 'No tiene puntaje adicional de la administración (suma 0).'
+        : 'La administración le asignó $pa ${plural(pa, 'punto', 'puntos')} de prioridad (suma $pa).',
+    'No tuvo celda en $hn de los últimos ciclos revisados (suma $hn).',
+    cu == 0
+        ? 'Nunca ha usado el parqueadero, así que su puntaje no se divide.'
+        : 'Ha usado el parqueadero en $cu ${plural(cu, 'ciclo', 'ciclos')}, por eso la suma se divide entre ${cu + 1}.',
+  ];
 }

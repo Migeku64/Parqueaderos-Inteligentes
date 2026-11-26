@@ -21,6 +21,8 @@ class ResidentHomeScreen extends StatelessWidget {
         final vehicles = asList(d['vehicles']);
         final current = d['current_assignment'] == null ? null : asMap(d['current_assignment']);
         final turn = asStr(d['turn_status'], 'INACTIVO');
+        final priority = d['priority'] == null ? null : asMap(d['priority']);
+        final left = countdown(d['next_draw_date']);
         return RefreshIndicator(
           onRefresh: reload,
           child: ListView(
@@ -106,6 +108,38 @@ class ResidentHomeScreen extends StatelessWidget {
                         ),
                 ),
               ),
+              // Próximo sorteo: cuánto falta y con qué prioridad participa
+              if (d['next_draw_date'] != null)
+                MaxWidth(
+                  width: 640,
+                  child: SectionCard(
+                    title: 'Próximo sorteo',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.event, color: AppColors.blue),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${fmtLongDate(d['next_draw_date'])}${left == null ? '' : ' · $left'}',
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (priority != null) ...[
+                          const SizedBox(height: 8),
+                          Text(asBool(priority['eligible'])
+                              ? 'Participa con un IPA de ${asDouble(priority['ipa']).toStringAsFixed(2)}. '
+                                  'En Sorteos puede ver por qué tiene ese puntaje.'
+                              : 'Por ahora no participa. En Sorteos puede ver el motivo.'),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               if (current != null)
                 MaxWidth(
                   width: 640,

@@ -17,6 +17,7 @@ class ResidentsScreen extends StatefulWidget {
 
 class _ResidentsScreenState extends State<ResidentsScreen> {
   String _query = '';
+  bool _debtOnly = false;
   Timer? _debounce;
   int _version = 0;
 
@@ -56,28 +57,64 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
             },
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Todos'),
+                selected: !_debtOnly,
+                onSelected: (_) => setState(() => _debtOnly = false),
+              ),
+              ChoiceChip(
+                showCheckmark: false,
+                avatar: const Icon(Icons.money_off, size: 18, color: AppColors.red),
+                label: const Text('Con deuda'),
+                selected: _debtOnly,
+                onSelected: (_) => setState(() => _debtOnly = true),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: Loader<List<Map<String, dynamic>>>(
-            key: ValueKey('$_query#$_version'),
-            load: () async => asList(await session.api.get('/residents', query: {'q': _query})),
+            key: ValueKey('$_query#$_debtOnly#$_version'),
+            load: () async => asList(await session.api.get('/residents', query: {
+              'q': _query,
+              if (_debtOnly) 'filter': 'deuda',
+            })),
             reloadOn: const {'assignments'},
             builder: (context, list, reload) {
-              if (list.isEmpty) return const EmptyView(message: 'No se encontraron residentes');
               return RefreshIndicator(
                 onRefresh: reload,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) => _ResidentTile(
-                    r: list[i],
-                    onTap: () async {
-                      await Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => ResidentDetailScreen(residentId: asInt(list[i]['id'])),
-                      ));
-                      reload();
-                    },
-                  ),
-                ),
+                child: list.isEmpty
+                    // Se puede deslizar para actualizar también cuando la lista está vacía
+                    ? ListView(children: [
+                        EmptyView(
+                          message: _debtOnly
+                              ? 'Ningún residente tiene deuda: todos están al día'
+                              : _query.isEmpty
+                                  ? 'Aún no hay residentes. Toque «Agregar» para registrar el primero'
+                                  : 'No se encontraron residentes con «$_query»',
+                        ),
+                      ])
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                        itemCount: list.length,
+                        itemBuilder: (context, i) => _ResidentTile(
+                          r: list[i],
+                          onTap: () async {
+                            await Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => ResidentDetailScreen(residentId: asInt(list[i]['id'])),
+                            ));
+                            reload();
+                          },
+                          onPaid: () async {
+                            if (await markPaid(context, list[i])) reload();
+                          },
+                        ),
+                      ),
               );
             },
           ),
@@ -87,11 +124,27 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
   }
 }
 
+/// Confirma y deja la deuda del residente en 0 (la administración ya verificó el pago).
+Future<bool> markPaid(BuildContext context, Map<String, dynamic> r) async {
+  final ok = await confirm(
+    context,
+    'Marcar al día',
+    '¿Confirma que ${asStr(r['full_name'])} (Casa ${asStr(r['house'])}) pagó ${fmtMoney(r['debt'])}?\n\n'
+        'La deuda quedará en \$0, el residente recibirá un aviso y podrá participar en el próximo sorteo.',
+    ok: 'Marcar al día',
+  );
+  if (!ok || !context.mounted) return false;
+  final res = await runAction(context, () => session.api.post('/residents/${asInt(r['id'])}/paid', {}),
+      success: '${asStr(r['full_name'])} quedó al día');
+  return res != null;
+}
+
 class _ResidentTile extends StatelessWidget {
-  const _ResidentTile({required this.r, required this.onTap});
+  const _ResidentTile({required this.r, required this.onTap, required this.onPaid});
 
   final Map<String, dynamic> r;
   final VoidCallback onTap;
+  final VoidCallback onPaid;
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +155,13 @@ class _ResidentTile extends StatelessWidget {
     final warnings = <Widget>[
       if (inactive) const Pill('Inactivo', color: AppColors.grey),
       if (debt > 0) Pill('Deuda ${fmtMoney(debt)}', color: AppColors.red),
+      if (debt > 0)
+        ActionChip(
+          visualDensity: VisualDensity.compact,
+          avatar: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.green),
+          label: const Text('Marcar al día'),
+          onPressed: onPaid,
+        ),
       if (vehicles.isEmpty) const Pill('Sin vehículo', color: AppColors.amber),
       if (current != null) Pill('Celda ${asStr(current['spot_code'])}', color: AppColors.green),
     ];
@@ -128,7 +188,12 @@ class _ResidentTile extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text('${asStr(r['document_type'])} ${asStr(r['document_number'])}'),
-              for (final v in vehicles) PlateBadge(asStr(v['plate'])),
+              for (final v in vehicles) ...[
+                PlateBadge(asStr(v['plate'])),
+                if ('${asStr(v['brand'])} ${asStr(v['color'])}'.trim().isNotEmpty)
+                  Text('${asStr(v['brand'])} ${asStr(v['color'])}'.trim(),
+                      style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              ],
               ...warnings,
             ],
           ),

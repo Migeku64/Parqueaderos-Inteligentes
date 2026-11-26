@@ -49,7 +49,7 @@ class _CyclesScreenState extends State<CyclesScreen> {
               ],
             ),
             const _IpaExplanation(),
-            if (cycles.isEmpty) const EmptyView(message: 'Aún no hay ciclos. Cree el primero.'),
+            if (cycles.isEmpty) const EmptyView(message: 'Aún no hay ciclos. Toque «Nuevo ciclo» para crear el primero.'),
             for (final c in cycles) _CycleCard(cycle: c, onChanged: _refresh),
           ],
         ),
@@ -369,7 +369,7 @@ class CycleDetailScreen extends StatelessWidget {
                   title: asStr(c['name']),
                   subtitle: 'Del ${fmtDate(c['start_date'])} al ${fmtDate(c['end_date'])} · ${asStr(c['status'])}',
                 ),
-                if (list.isEmpty) const EmptyView(message: 'Este ciclo no tiene asignaciones. Ejecute el sorteo.'),
+                if (list.isEmpty) const EmptyView(message: 'Este ciclo no tiene asignaciones. Haga el sorteo o asigne celdas desde el Mapa.'),
                 for (final a in list)
                   Card(
                     elevation: 0,

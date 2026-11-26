@@ -44,6 +44,20 @@ DateTime? parseDate(dynamic v) {
   return DateTime.tryParse(s)?.toLocal();
 }
 
+/// Cuenta regresiva hasta una fecha: «Es hoy», «Falta 1 día», «Faltan 5 días».
+/// Devuelve null si la fecha ya pasó o no es válida.
+String? countdown(dynamic v, [DateTime? now]) {
+  final d = parseDate(v);
+  if (d == null) return null;
+  final n = now ?? DateTime.now();
+  final hours = DateTime(d.year, d.month, d.day).difference(DateTime(n.year, n.month, n.day)).inHours;
+  final days = (hours / 24).round();
+  if (days < 0) return null;
+  if (days == 0) return 'Es hoy';
+  if (days == 1) return 'Falta 1 día';
+  return 'Faltan $days días';
+}
+
 String two(int n) => n.toString().padLeft(2, '0');
 
 /// 2026-04-29 -> "29/04/2026"

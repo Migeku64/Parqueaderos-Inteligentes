@@ -75,11 +75,21 @@ class _UsersScreenState extends State<UsersScreen> {
                 return asStr(u['username']).toLowerCase().contains(_q) ||
                     asStr(u['full_name']).toLowerCase().contains(_q);
               }).toList();
-              if (list.isEmpty) return const EmptyView(message: 'Sin usuarios');
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                itemCount: list.length,
-                itemBuilder: (context, i) => _userTile(context, list[i]),
+              // Deslizar hacia abajo actualiza la lista
+              return RefreshIndicator(
+                onRefresh: reload,
+                child: list.isEmpty
+                    ? ListView(children: [
+                        EmptyView(
+                            message: _q.isEmpty && _role == 'todos'
+                                ? 'Aún no hay usuarios. Toque «Nuevo usuario» para crear el primero.'
+                                : 'Ningún usuario coincide con la búsqueda o el filtro.'),
+                      ])
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                        itemCount: list.length,
+                        itemBuilder: (context, i) => _userTile(context, list[i]),
+                      ),
               );
             },
           ),

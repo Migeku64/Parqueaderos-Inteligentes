@@ -110,8 +110,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         reloadOn: const {'notification'},
         builder: (context, d, reload) {
           final items = asList(d['items']).where((n) => !_gone.contains(asInt(n['id']))).toList();
-          if (items.isEmpty) return const EmptyView(message: 'No tiene notificaciones', icon: Icons.notifications_none);
-          return MaxWidth(
+          if (items.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: reload,
+              child: ListView(children: const [
+                EmptyView(
+                    message: 'No tiene notificaciones. Aquí aparecerán los avisos del sorteo, de su celda y de la administración.',
+                    icon: Icons.notifications_none),
+              ]),
+            );
+          }
+          // Deslizar hacia abajo actualiza la lista
+          return RefreshIndicator(
+            onRefresh: reload,
+            child: MaxWidth(
             width: 760,
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -168,6 +180,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 );
               }),
             ),
+          ),
           );
         },
       ),

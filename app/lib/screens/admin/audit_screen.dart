@@ -34,6 +34,7 @@ const _actionLabels = {
   'usuario_desbloqueado': 'Usuario desbloqueado',
   'crear_residente': 'Residente creado',
   'editar_residente': 'Residente editado',
+  'marcar_al_dia': 'Residente marcado al día',
   'inactivar_residente': 'Residente inactivado',
   'crear_vehiculo': 'Vehículo creado',
   'editar_vehiculo': 'Vehículo editado',
@@ -56,6 +57,7 @@ const _actionLabels = {
   'crear_celdas': 'Celdas creadas',
   'editar_celda': 'Celda editada',
   'eliminar_celda': 'Celda eliminada',
+  'eliminar_celda_con_historial': 'Celda eliminada con su historial',
   'eliminar_celdas': 'Celdas eliminadas',
   'eliminar_residente': 'Residente eliminado',
   'inactivar_vehiculo': 'Vehículo retirado',
@@ -139,7 +141,7 @@ class _AuditTabState extends State<_AuditTab> {
             key: ValueKey(_action),
             load: () async => asList(await session.api.get('/audit', query: {'action': _action, 'limit': 300})),
             builder: (context, list, reload) => list.isEmpty
-                ? const EmptyView(message: 'Sin registros')
+                ? const EmptyView(message: 'No hay registros con estos filtros. Pruebe con otro tipo de acción u otras fechas.')
                 : RefreshIndicator(
                     onRefresh: reload,
                     child: ListView.separated(
@@ -246,7 +248,7 @@ class _BackupsTabState extends State<_BackupsTab> {
               ],
             ),
           ),
-          if (list.isEmpty) const EmptyView(message: 'Aún no hay respaldos'),
+          if (list.isEmpty) const EmptyView(message: 'Aún no hay respaldos. Toque «Respaldar ahora» para crear el primero.'),
           for (final b in list)
             Card(
               elevation: 0,

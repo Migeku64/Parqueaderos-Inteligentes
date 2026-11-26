@@ -2,7 +2,7 @@
 import { sql } from '../db.js';
 import { badRequest, conflict, notFound, required, intParam, normalizePlate } from '../http.js';
 import { ADMIN, STAFF, hashPassword, validatePassword } from '../auth.js';
-import { audit } from '../events.js';
+import { audit, notify } from '../events.js';
 import { config } from '../config.js';
 
 const VEHICLE_TYPES = ['carro', 'moto', 'camioneta', 'otro'];
@@ -58,6 +58,8 @@ export default function residentRoutes(r) {
   r.get('/residents', STAFF, async (ctx) => {
     const q = String(ctx.query.q || '').trim();
     const status = ctx.query.status;
+    // filter=deuda: solo residentes que deben a la administración
+    const debtOnly = ctx.query.filter === 'deuda' ? sql`AND r.deuda > 0` : sql``;
     const like = `%${q}%`;
     const plate = `%${normalizePlate(q)}%`;
     return sql`
@@ -66,6 +68,7 @@ export default function residentRoutes(r) {
              OR h.numero ILIKE ${like} OR (h.bloque || '-' || h.numero) ILIKE ${like}
              OR EXISTS (SELECT 1 FROM vehiculo v WHERE v.residente_id = r.id AND v.placa LIKE ${plate}))
         AND (${status || null}::text IS NULL OR r.estado = ${status || null})
+        ${debtOnly}
       ORDER BY h.bloque, length(h.numero), h.numero, r.nombre_completo
       LIMIT 500`;
   });
@@ -145,6 +148,26 @@ export default function residentRoutes(r) {
     return getResident(id);
   });
 
+  // Marcar al día: la administración verificó el pago y deja la deuda en 0.
+  // Queda en la auditoría con el valor que debía y se le avisa al residente.
+  r.post('/residents/:id/paid', ADMIN, async (ctx) => {
+    const id = intParam(ctx.params.id);
+    const [before] = await sql`SELECT deuda FROM residente WHERE id = ${id}`;
+    if (!before) throw notFound('Residente no encontrado');
+    const owed = Number(before.debt);
+    if (owed <= 0) throw badRequest('Este residente ya está al día');
+    await sql`UPDATE residente SET deuda = 0, actualizado_en = now() WHERE id = ${id}`;
+    await audit(null, ctx.user.id, 'marcar_al_dia', 'residente', id, { deuda_anterior: owed, motivo: ctx.body?.reason || null });
+    const money = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(owed);
+    await notify({
+      residentIds: [id],
+      title: 'Su cuenta quedó al día',
+      body: `La administración registró su pago de $${money}. Ya puede participar en el próximo sorteo.`,
+      kind: 'info',
+    });
+    return getResident(id);
+  });
+
   // Eliminación lógica: el residente queda inactivo y se conserva su historial.
   r.delete('/residents/:id', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
@@ -183,12 +206,14 @@ export default function residentRoutes(r) {
   // ---------------- Vehículos ----------------
   r.get('/vehicles', STAFF, async (ctx) => {
     const plate = normalizePlate(ctx.query.plate);
+    // limit: el control de acceso pide pocas sugerencias mientras el guarda escribe
+    const limit = Math.min(Math.max(Number(ctx.query.limit) || 500, 1), 500);
     return sql`
       SELECT v.*, r.nombre_completo AS resident_name,
              CASE WHEN h.bloque = '' THEN h.numero ELSE h.bloque || '-' || h.numero END AS house
       FROM vehiculo v JOIN residente r ON r.id = v.residente_id JOIN vivienda h ON h.id = r.vivienda_id
       WHERE (${plate} = '' OR v.placa LIKE ${'%' + plate + '%'})
-      ORDER BY v.placa LIMIT 500`;
+      ORDER BY (v.placa LIKE ${plate + '%'}) DESC, v.activo DESC, v.placa LIMIT ${limit}`;
   });
 
   r.post('/residents/:id/vehicles', ADMIN, async (ctx) => {

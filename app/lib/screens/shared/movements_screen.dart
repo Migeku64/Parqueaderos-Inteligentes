@@ -107,7 +107,7 @@ class _MovementsScreenState extends State<MovementsScreen> {
             load: () async => asList(await session.api.get('/movements', query: query)),
             reloadOn: const {'movement'},
             builder: (context, list, reload) => list.isEmpty
-                ? const EmptyView(message: 'No hay movimientos con estos filtros')
+                ? const EmptyView(message: 'No hay movimientos con estos filtros. Pruebe con «Todas las fechas» o «Todos».')
                 : RefreshIndicator(
                     onRefresh: reload,
                     child: ListView.separated(

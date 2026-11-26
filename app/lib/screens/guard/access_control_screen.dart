@@ -32,6 +32,26 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
 
   String get _plateValue => normalizePlate(_plate.text);
 
+  /// Sugerencias de placas registradas desde la tercera letra; si falla la consulta no se muestra nada.
+  Future<Iterable<Map<String, dynamic>>> _suggestions(TextEditingValue value) async {
+    final q = normalizePlate(value.text);
+    if (q.length < 3) return const [];
+    try {
+      final list = asList(await session.api.get('/vehicles', query: {'plate': q, 'limit': 6}));
+      // Si el guarda ya escribió la placa completa y existe, no hace falta sugerir
+      if (list.length == 1 && asStr(list.first['plate']) == q) return const [];
+      return list;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Aviso para el guarda cuando se rechaza un ingreso: vibración y sonido de alerta.
+  void _alertRejected() {
+    HapticFeedback.vibrate();
+    SystemSound.play(SystemSoundType.alert);
+  }
+
   Future<void> _lookup() async {
     if (_plateValue.length < 5) {
       showSnack(context, 'Escriba una placa válida (ej. ABC123)', error: true);
@@ -55,6 +75,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
     setState(() => _busy = true);
     final r = await runAction(context, () => session.api.post('/movements', {'plate': _plateValue, 'type': type}));
     if (!mounted) return;
+    if (r != null && !asBool(asMap(r)['authorized'])) _alertRejected();
     setState(() {
       _busy = false;
       if (r != null) {
@@ -94,19 +115,55 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: _plate,
+              // Mientras el guarda escribe, se sugieren las placas registradas que coinciden
+              RawAutocomplete<Map<String, dynamic>>(
+                textEditingController: _plate,
                 focusNode: _focus,
-                autofocus: true,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9 -]')),
-                  LengthLimitingTextInputFormatter(8),
-                ],
-                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4),
-                textAlign: TextAlign.center,
-                decoration: inputDeco('Placa del vehículo', hint: 'ABC123'),
-                onSubmitted: (_) => _lookup(),
+                displayStringForOption: (v) => asStr(v['plate']),
+                optionsBuilder: _suggestions,
+                onSelected: (v) {
+                  _plate.text = asStr(v['plate']);
+                  _lookup();
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) => TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9 -]')),
+                    LengthLimitingTextInputFormatter(8),
+                  ],
+                  style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4),
+                  textAlign: TextAlign.center,
+                  decoration: inputDeco('Placa del vehículo', hint: 'ABC123'),
+                  onSubmitted: (_) => _lookup(),
+                ),
+                optionsViewBuilder: (context, onSelected, options) => Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 6,
+                    borderRadius: BorderRadius.circular(16),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280, maxWidth: 420),
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        shrinkWrap: true,
+                        children: [
+                          for (final v in options)
+                            ListTile(
+                              dense: true,
+                              leading: PlateBadge(asStr(v['plate'])),
+                              title: Text(asStr(v['resident_name']), overflow: TextOverflow.ellipsis),
+                              subtitle: Text('Casa ${asStr(v['house'])}'
+                                  '${asStr(v['brand']).isEmpty ? '' : ' · ${asStr(v['brand'])} ${asStr(v['color'])}'}'),
+                              onTap: () => onSelected(v),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -253,7 +310,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
           ),
           Expanded(
             child: list.isEmpty
-                ? const EmptyView(message: 'Aún no hay movimientos')
+                ? const EmptyView(message: 'Aún no hay movimientos. Escriba una placa y toque ENTRADA para registrar el primero.')
                 : ListView.builder(
                     itemCount: list.length,
                     itemBuilder: (context, i) => movementTile(list[i]),

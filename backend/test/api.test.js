@@ -177,6 +177,26 @@ test('CRUD de residentes y vehículos con búsqueda', async () => {
   assert.equal(bad.status, 400);
   const detail = await api('GET', `/residents/${c.data.id}`);
   assert.equal(detail.data.vehicles.length, 2);
+  // Filtro «Con deuda» y «Marcar al día»
+  const debtors = await api('GET', '/residents?filter=deuda');
+  assert.ok(debtors.data.length >= 1 && debtors.data.every((r) => Number(r.debt) > 0));
+  assert.ok(debtors.data.some((r) => r.id === c.data.id));
+  assert.equal((await api('POST', `/residents/${c.data.id}/paid`, {}, 'guarda')).status, 403);
+  const paid = await api('POST', `/residents/${c.data.id}/paid`, {});
+  assert.equal(paid.status, 200, JSON.stringify(paid.data));
+  assert.equal(Number(paid.data.debt), 0);
+  assert.equal((await api('POST', `/residents/${c.data.id}/paid`, {})).status, 400, 'ya estaba al día');
+  const [log] = await sql`SELECT detalles FROM auditoria WHERE accion = 'marcar_al_dia' AND entidad_id = ${c.data.id}`;
+  assert.equal(Number(log.details?.deuda_anterior ?? log.detalles?.deuda_anterior), 50000);
+  const [aviso] = await sql`
+    SELECT n.titulo FROM notificacion n JOIN cuenta_usuario u ON u.id = n.cuenta_usuario_id
+    WHERE u.residente_id = ${c.data.id} ORDER BY n.id DESC LIMIT 1`;
+  assert.equal(aviso.title ?? aviso.titulo, 'Su cuenta quedó al día');
+  // Sugerencias de placa del control de acceso: primero las que empiezan igual
+  const sug = await api('GET', '/vehicles?plate=PRB&limit=3', null, 'guarda');
+  assert.equal(sug.status, 200);
+  assert.ok(sug.data.length <= 3);
+  assert.equal(sug.data[0].plate, 'PRB123');
 });
 
 test('mapa de celdas y resumen', async () => {

@@ -35,11 +35,14 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
           counts[st] = (counts[st] ?? 0) + 1;
         }
         final q = normalizePlate(_query);
+        // «casa 150», «Casa 150» o «150» buscan la casa 150
+        final house = _query.trim().toLowerCase().replaceFirst(RegExp(r'^casa\s*'), '');
         final visible = spots.where((s) {
           if (_filter != 'todas' && asStr(s['state']) != _filter) return false;
           if (q.isEmpty) return true;
           return asStr(s['code']).contains(q) ||
               asStr(s['plate']).contains(q) ||
+              (house.isNotEmpty && asStr(s['house']).toLowerCase() == house) ||
               normalizePlate(asStr(s['resident_name'])).contains(q);
         }).toList();
         final List<Map<String, dynamic>> mine =
@@ -99,7 +102,12 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       for (final f in const ['todas', 'libre', 'asignada', 'ocupada', 'inactiva'])
+                        // El punto de color de cada filtro sirve de leyenda del mapa
                         ChoiceChip(
+                          showCheckmark: f == 'todas',
+                          avatar: f == 'todas'
+                              ? null
+                              : CircleAvatar(radius: 7, backgroundColor: SpotStyle.of(f).color),
                           label: Text(f == 'todas'
                               ? 'Todas (${spots.length})'
                               : '${SpotStyle.of(f).label} (${counts[f] ?? 0})'),
@@ -108,9 +116,9 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                         ),
                       if (!user.isResident)
                         SizedBox(
-                          width: 220,
+                          width: 280,
                           child: TextField(
-                            decoration: inputDeco('Buscar celda, placa o nombre', icon: Icons.search),
+                            decoration: inputDeco('Buscar celda, placa, casa o nombre', icon: Icons.search),
                             onChanged: (v) => setState(() => _query = v),
                           ),
                         ),
@@ -137,7 +145,7 @@ class _SpotsMapScreenState extends State<SpotsMapScreen> {
                 ),
               ),
               if (visible.isEmpty)
-                const SliverToBoxAdapter(child: EmptyView(message: 'No hay celdas con ese filtro')),
+                const SliverToBoxAdapter(child: EmptyView(message: 'No hay celdas con ese filtro o búsqueda. Toque «Todas» o borre la búsqueda.')),
             ],
           ),
         );
