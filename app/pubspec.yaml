@@ -26,3 +26,4 @@ flutter:
     - assets/logo.png
     - assets/logo_full.png
     - assets/sounds/ingreso_rechazado.wav
+    - assets/sounds/ingreso_autorizado.wav

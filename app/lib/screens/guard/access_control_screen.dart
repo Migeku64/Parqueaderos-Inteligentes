@@ -26,6 +26,9 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
   // Hay sugerencias de placa a la vista (Enter elige la resaltada en lugar de consultar)
   bool _hasSuggestions = false;
   final _player = AudioPlayer();
+  // Destello de toda la pantalla: verde si se autoriza, rojo si se rechaza
+  Color _flashColor = AppColors.green;
+  bool _flashOn = false;
   int _version = 0;
 
   @override
@@ -58,6 +61,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
   /// El sonido es un archivo propio, así suena igual en el PC y en el celular.
   Future<void> _alertRejected() async {
     HapticFeedback.vibrate();
+    _flash(AppColors.red);
     try {
       await _player.stop();
       await _player.play(AssetSource('sounds/ingreso_rechazado.wav'), volume: 1.0);
@@ -65,6 +69,27 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
       // Si el dispositivo no puede reproducir audio, queda al menos el sonido del sistema
       SystemSound.play(SystemSoundType.alert);
     }
+  }
+
+  /// Confirmación de un registro autorizado: destello verde y un sonido corto y suave.
+  Future<void> _confirmAuthorized() async {
+    _flash(AppColors.green);
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('sounds/ingreso_autorizado.wav'), volume: 0.8);
+    } catch (_) {
+      // Sin audio no pasa nada: queda el destello verde
+    }
+  }
+
+  void _flash(Color color) {
+    setState(() {
+      _flashColor = color;
+      _flashOn = true;
+    });
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => _flashOn = false);
+    });
   }
 
   Future<void> _lookup() async {
@@ -90,7 +115,13 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
     setState(() => _busy = true);
     final r = await runAction(context, () => session.api.post('/movements', {'plate': _plateValue, 'type': type}));
     if (!mounted) return;
-    if (r != null && !asBool(asMap(r)['authorized'])) _alertRejected();
+    if (r != null) {
+      if (asBool(asMap(r)['authorized'])) {
+        _confirmAuthorized();
+      } else {
+        _alertRejected();
+      }
+    }
     setState(() {
       _busy = false;
       if (r != null) {
@@ -108,7 +139,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
     final wide = isWide(context);
     final panel = _controlPanel();
     final recent = _recentList();
-    return wide
+    final content = wide
         ? Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -117,6 +148,49 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
             ],
           )
         : ListView(children: [panel, SizedBox(height: 420, child: recent)]);
+    return Stack(
+      children: [
+        content,
+        // Destello de color sobre toda la pantalla; no bloquea los toques
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _flashOn ? 0.35 : 0,
+              duration: const Duration(milliseconds: 250),
+              child: ColoredBox(color: _flashColor),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Cuántos vehículos hay dentro ahora (celdas ocupadas) y cuántas celdas quedan libres.
+  Widget _insideCounter() {
+    return Loader<Map<String, dynamic>>(
+      load: () async => asMap(await session.api.get('/spots/summary')),
+      reloadOn: const {'spots', 'movement'},
+      builder: (context, s, reload) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.directions_car, color: AppColors.red),
+                const SizedBox(width: 6),
+                Text('Vehículos dentro ahora: ${asInt(s['occupied'])}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ],
+            ),
+            Pill('Celdas libres: ${asInt(s['free'])}', color: AppColors.green),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _controlPanel() {
@@ -126,6 +200,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const PageHeader(title: 'Control de acceso', subtitle: 'Registre la entrada y salida de vehículos'),
+        _insideCounter(),
         SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
