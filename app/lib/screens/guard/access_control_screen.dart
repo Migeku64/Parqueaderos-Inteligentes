@@ -1,4 +1,6 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/format.dart';
@@ -21,12 +23,16 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
   Map<String, dynamic>? _check;
   Map<String, dynamic>? _last;
   bool _busy = false;
+  // Hay sugerencias de placa a la vista (Enter elige la resaltada en lugar de consultar)
+  bool _hasSuggestions = false;
+  final _player = AudioPlayer();
   int _version = 0;
 
   @override
   void dispose() {
     _plate.dispose();
     _focus.dispose();
+    _player.dispose();
     super.dispose();
   }
 
@@ -35,11 +41,13 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
   /// Sugerencias de placas registradas desde la tercera letra; si falla la consulta no se muestra nada.
   Future<Iterable<Map<String, dynamic>>> _suggestions(TextEditingValue value) async {
     final q = normalizePlate(value.text);
+    _hasSuggestions = false;
     if (q.length < 3) return const [];
     try {
       final list = asList(await session.api.get('/vehicles', query: {'plate': q, 'limit': 6}));
       // Si el guarda ya escribió la placa completa y existe, no hace falta sugerir
       if (list.length == 1 && asStr(list.first['plate']) == q) return const [];
+      _hasSuggestions = list.isNotEmpty;
       return list;
     } catch (_) {
       return const [];
@@ -47,9 +55,16 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
   }
 
   /// Aviso para el guarda cuando se rechaza un ingreso: vibración y sonido de alerta.
-  void _alertRejected() {
+  /// El sonido es un archivo propio, así suena igual en el PC y en el celular.
+  Future<void> _alertRejected() async {
     HapticFeedback.vibrate();
-    SystemSound.play(SystemSoundType.alert);
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('sounds/ingreso_rechazado.wav'), volume: 1.0);
+    } catch (_) {
+      // Si el dispositivo no puede reproducir audio, queda al menos el sonido del sistema
+      SystemSound.play(SystemSoundType.alert);
+    }
   }
 
   Future<void> _lookup() async {
@@ -122,6 +137,7 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
                 displayStringForOption: (v) => asStr(v['plate']),
                 optionsBuilder: _suggestions,
                 onSelected: (v) {
+                  _hasSuggestions = false;
                   _plate.text = asStr(v['plate']);
                   _lookup();
                 },
@@ -137,7 +153,14 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
                   style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4),
                   textAlign: TextAlign.center,
                   decoration: inputDeco('Placa del vehículo', hint: 'ABC123'),
-                  onSubmitted: (_) => _lookup(),
+                  // Con sugerencias a la vista, Enter elige la que está resaltada (flechas ↑ ↓)
+                  onSubmitted: (_) {
+                    if (_hasSuggestions) {
+                      onFieldSubmitted();
+                    } else {
+                      _lookup();
+                    }
+                  },
                 ),
                 optionsViewBuilder: (context, onSelected, options) => Align(
                   alignment: Alignment.topLeft,
@@ -146,20 +169,30 @@ class _AccessControlScreenState extends State<AccessControlScreen> {
                     borderRadius: BorderRadius.circular(16),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 280, maxWidth: 420),
-                      child: ListView(
+                      child: ListView.builder(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         shrinkWrap: true,
-                        children: [
-                          for (final v in options)
-                            ListTile(
-                              dense: true,
-                              leading: PlateBadge(asStr(v['plate'])),
-                              title: Text(asStr(v['resident_name']), overflow: TextOverflow.ellipsis),
-                              subtitle: Text('Casa ${asStr(v['house'])}'
-                                  '${asStr(v['brand']).isEmpty ? '' : ' · ${asStr(v['brand'])} ${asStr(v['color'])}'}'),
-                              onTap: () => onSelected(v),
-                            ),
-                        ],
+                        itemCount: options.length,
+                        itemBuilder: (context, i) {
+                          final v = options.elementAt(i);
+                          // Las flechas ↑ ↓ del teclado mueven la opción resaltada
+                          final highlighted = AutocompleteHighlightedOption.of(context) == i;
+                          if (highlighted) {
+                            SchedulerBinding.instance.addPostFrameCallback((_) {
+                              if (context.mounted) Scrollable.ensureVisible(context, alignment: 0.5);
+                            });
+                          }
+                          return ListTile(
+                            dense: true,
+                            selected: highlighted,
+                            selectedTileColor: AppColors.blue.withAlpha(30),
+                            leading: PlateBadge(asStr(v['plate'])),
+                            title: Text(asStr(v['resident_name']), overflow: TextOverflow.ellipsis),
+                            subtitle: Text('Casa ${asStr(v['house'])}'
+                                '${asStr(v['brand']).isEmpty ? '' : ' · ${asStr(v['brand'])} ${asStr(v['color'])}'}'),
+                            onTap: () => onSelected(v),
+                          );
+                        },
                       ),
                     ),
                   ),
