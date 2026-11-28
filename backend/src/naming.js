@@ -37,6 +37,7 @@ export const COLUMNS = {
   debt: 'deuda',
   admin_score: 'puntaje_administrativo',
   has_disability: 'tiene_discapacidad',
+  resident_type: 'tipo_residente',
   created_at: 'creado_en',
   updated_at: 'actualizado_en',
   resident_id: 'residente_id',

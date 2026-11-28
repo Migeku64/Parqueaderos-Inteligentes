@@ -6,6 +6,24 @@ import { audit, notify } from '../events.js';
 import { config } from '../config.js';
 
 const VEHICLE_TYPES = ['carro', 'moto', 'camioneta', 'otro'];
+// En el conjunto vive el propietario de la casa o un arrendatario (inquilino)
+export const RESIDENT_TYPES = ['propietario', 'arrendatario'];
+
+function residentType(value, fallback = 'propietario') {
+  const t = value === undefined || value === null || value === '' ? fallback : String(value).toLowerCase();
+  if (!RESIDENT_TYPES.includes(t)) throw badRequest('El residente debe ser propietario o arrendatario');
+  return t;
+}
+
+/** La casa queda «habitada por el propietario» si ninguno de sus residentes activos es arrendatario. */
+async function syncOwnerOccupied(tx, houseIds) {
+  for (const id of new Set(houseIds.filter(Boolean))) {
+    await tx`
+      UPDATE vivienda SET habitada_por_propietario = NOT EXISTS (
+        SELECT 1 FROM residente r WHERE r.vivienda_id = ${id} AND r.estado = 'activo' AND r.tipo_residente = 'arrendatario')
+      WHERE id = ${id}`;
+  }
+}
 
 async function findOrCreateHouse(tx, block, number) {
   const b = String(block || '').trim().toUpperCase();
@@ -59,7 +77,10 @@ export default function residentRoutes(r) {
     const q = String(ctx.query.q || '').trim();
     const status = ctx.query.status;
     // filter=deuda: solo residentes que deben a la administración
-    const debtOnly = ctx.query.filter === 'deuda' ? sql`AND r.deuda > 0` : sql``;
+    // filter=propietario | arrendatario: solo los de ese tipo
+    const f = ctx.query.filter;
+    const debtOnly = f === 'deuda' ? sql`AND r.deuda > 0`
+      : RESIDENT_TYPES.includes(f) ? sql`AND r.tipo_residente = ${f}` : sql``;
     const like = `%${q}%`;
     const plate = `%${normalizePlate(q)}%`;
     return sql`
@@ -96,11 +117,13 @@ export default function residentRoutes(r) {
       const houseId = await findOrCreateHouse(tx, b.house_block, b.house_number);
       const [res] = await tx`
         INSERT INTO residente (vivienda_id, nombre_completo, tipo_documento, numero_documento, telefono, correo,
-                              deuda, puntaje_administrativo, tiene_discapacidad)
+                              deuda, puntaje_administrativo, tiene_discapacidad, tipo_residente)
         VALUES (${houseId}, ${String(b.full_name).trim()}, ${b.document_type || 'CC'},
                 ${String(b.document_number).trim()}, ${b.phone || null}, ${b.email || null},
-                ${Number(b.debt) || 0}, ${Number(b.admin_score) || 0}, ${!!b.has_disability})
+                ${Number(b.debt) || 0}, ${Number(b.admin_score) || 0}, ${!!b.has_disability},
+                ${residentType(b.resident_type)})
         RETURNING id`;
+      await syncOwnerOccupied(tx, [houseId]);
       if (b.vehicle && b.vehicle.plate) {
         const v = vehicleInput(b.vehicle);
         await tx`INSERT INTO vehiculo ${tx({ ...v, resident_id: res.id })}`;
@@ -141,8 +164,10 @@ export default function residentRoutes(r) {
           deuda = ${b.debt !== undefined ? Number(b.debt) || 0 : current.debt},
           puntaje_administrativo = ${b.admin_score !== undefined ? Number(b.admin_score) || 0 : current.admin_score},
           tiene_discapacidad = ${b.has_disability !== undefined ? !!b.has_disability : current.has_disability},
+          tipo_residente = ${residentType(b.resident_type, current.resident_type)},
           actualizado_en = now()
         WHERE id = ${id}`;
+      await syncOwnerOccupied(tx, [current.house_id, houseId]);
       await audit(tx, ctx.user.id, 'editar_residente', 'residente', id, b);
     });
     const updated = await getResident(id);
@@ -197,7 +222,7 @@ export default function residentRoutes(r) {
   // (sin asignaciones ni entradas/salidas de sus vehículos). Si tienen historial se inactivan.
   r.delete('/residents/:id/permanent', ADMIN, async (ctx) => {
     const id = intParam(ctx.params.id);
-    const [res] = await sql`SELECT id, nombre_completo FROM residente WHERE id = ${id}`;
+    const [res] = await sql`SELECT id, nombre_completo, vivienda_id FROM residente WHERE id = ${id}`;
     if (!res) throw notFound('Residente no encontrado');
     const [h] = await sql`
       SELECT (SELECT count(*) FROM asignacion WHERE residente_id = ${id})::int AS asignaciones,
@@ -213,6 +238,7 @@ export default function residentRoutes(r) {
       // La cuenta del residente (si tiene) se elimina con él; sus vehículos se borran en cascada.
       await tx`DELETE FROM cuenta_usuario WHERE residente_id = ${id}`;
       await tx`DELETE FROM residente WHERE id = ${id}`;
+      await syncOwnerOccupied(tx, [res.house_id]);
     });
     await audit(null, ctx.user.id, 'eliminar_residente', 'residente', id, { nombre: res.full_name });
     return { ok: true };

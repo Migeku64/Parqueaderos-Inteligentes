@@ -511,6 +511,60 @@ test('reportes JSON y CSV, auditoría, dashboard y respaldo', async () => {
   assert.ok(xl.headers.get('content-disposition').includes('.xlsx'));
   const bytes = Buffer.from(await xl.arrayBuffer());
   assert.equal(bytes.subarray(0, 2).toString(), 'PK');
+
+  // Respaldo automático por fecha: no repite si el último es reciente; sí lo hace si ya pasó un día
+  // (en Render gratuito el servidor se apaga, así que no se puede esperar un temporizador de 24 h)
+  const { runDueBackup } = await import('../src/services/backup.js');
+  assert.equal(await runDueBackup(), null);
+  await sql`UPDATE respaldo SET creado_en = now() - interval '25 hours'`;
+  const due = await runDueBackup();
+  assert.equal(due.status, 'ok');
+  assert.equal(due.trigger, 'automatico');
+  assert.equal(await runDueBackup(), null);
+
+  // Llega al correo de la administración; si el correo falla, el motivo queda en el respaldo
+  await new Promise((r) => setTimeout(r, 300));
+  const mailed = sentMails.find((m) => m.body.subject.startsWith('Respaldo del parqueadero'));
+  assert.ok(mailed && mailed.body.attachment.length === 2);
+  const [okRow] = await sql`SELECT enviado_correo_en, error FROM respaldo WHERE id = ${due.id}`;
+  assert.ok(okRow.backup_emailed_at);
+  const prevAdmins = process.env.EMAIL_ADMINS;
+  process.env.EMAIL_ADMINS = '';
+  const noMail = await api('POST', '/backups', {});
+  await new Promise((r) => setTimeout(r, 200));
+  process.env.EMAIL_ADMINS = prevAdmins;
+  const [errRow] = await sql`SELECT error FROM respaldo WHERE id = ${noMail.data.id}`;
+  assert.match(errRow.error, /No se envió por correo: Falta configurar EMAIL_ADMINS/);
+});
+
+test('residentes: propietario o arrendatario', async () => {
+  // Los datos de demostración traen de los dos tipos
+  const owners = await api('GET', '/residents?filter=propietario');
+  const tenants = await api('GET', '/residents?filter=arrendatario');
+  assert.ok(owners.data.length > 0 && tenants.data.length > 0);
+  assert.ok(tenants.data.every((r) => r.resident_type === 'arrendatario'));
+  assert.equal(owners.data.length + tenants.data.length, (await sql`SELECT count(*)::int AS n FROM residente`)[0].n);
+
+  // Al crear sin decirlo queda como propietario; se puede crear como arrendatario
+  const t = await api('POST', '/residents', {
+    full_name: 'Inquilino Prueba', document_number: '99887766', house_number: '299', resident_type: 'arrendatario',
+  });
+  assert.equal(t.status, 201);
+  assert.equal(t.data.resident_type, 'arrendatario');
+  const [h1] = await sql`SELECT habitada_por_propietario FROM vivienda WHERE id = ${t.data.house_id}`;
+  assert.equal(h1.is_owner_occupied, false);
+
+  // Se cambia a propietario y la casa vuelve a quedar habitada por su dueño (si nadie más es arrendatario)
+  const others = await sql`SELECT count(*)::int AS n FROM residente WHERE vivienda_id = ${t.data.house_id} AND tipo_residente = 'arrendatario' AND id <> ${t.data.id}`;
+  const u = await api('PUT', `/residents/${t.data.id}`, { resident_type: 'propietario' });
+  assert.equal(u.data.resident_type, 'propietario');
+  const [h2] = await sql`SELECT habitada_por_propietario FROM vivienda WHERE id = ${t.data.house_id}`;
+  assert.equal(h2.is_owner_occupied, others[0].n === 0);
+
+  const bad = await api('PUT', `/residents/${t.data.id}`, { resident_type: 'visitante' });
+  assert.equal(bad.status, 400);
+  const del = await api('DELETE', `/residents/${t.data.id}/permanent`);
+  assert.equal(del.status, 200);
 });
 
 test('ciclos: validación de fechas, cierre y activación', async () => {

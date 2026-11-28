@@ -1,7 +1,7 @@
 import { createServer } from './app.js';
 import { config } from './config.js';
 import { sql } from './db.js';
-import { runBackup } from './services/backup.js';
+import { runDueBackup } from './services/backup.js';
 import { notify } from './events.js';
 import { runScheduledDraws } from './services/drawRunner.js';
 import { runScheduledAuditReport } from './services/auditReport.js';
@@ -28,9 +28,17 @@ server.listen(config.port, '0.0.0.0', () => {
 const HOUR = 3600_000;
 
 // Respaldo automático (RF20)
-if (config.backupIntervalHours > 0) {
-  setInterval(() => runBackup('automatico'), config.backupIntervalHours * HOUR).unref();
+// Se revisa al arrancar y cada 15 minutos si ya pasó el intervalo desde el último respaldo
+// (un temporizador de 24 h no sirve en Render gratuito, que apaga el servidor sin uso).
+async function dueBackup() {
+  try {
+    await runDueBackup();
+  } catch (err) {
+    console.error('[backup] revisión programada', err);
+  }
 }
+setTimeout(dueBackup, 20_000).unref();
+setInterval(dueBackup, 15 * 60_000).unref();
 
 // Recordatorio de fin de ciclo: 7 días antes, una sola vez por ciclo (RF13)
 async function cycleReminders() {

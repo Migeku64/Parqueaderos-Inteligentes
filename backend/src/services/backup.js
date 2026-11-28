@@ -52,9 +52,10 @@ export async function runBackup(trigger = 'automatico') {
       console.warn('[backup] no se pudo escribir en disco:', e.message);
     }
     await pruneOldBackups();
-    // 3. Por correo, sin hacer esperar a quien pidió el respaldo
-    if (config.backupEmail && emailEnabled()) {
-      emailBackup(rec.id, fileName, json).catch((e) => console.error('[backup] correo', e));
+    // 3. Por correo, sin hacer esperar a quien pidió el respaldo.
+    // Si no se puede enviar, el motivo queda en el respaldo y se ve en la app (Auditoría → Respaldos).
+    if (config.backupEmail) {
+      emailBackup(rec.id, fileName, json).catch((e) => markEmailError(rec.id, e.message || String(e)));
     }
     return rec;
   } catch (err) {
@@ -70,7 +71,8 @@ export async function runBackup(trigger = 'automatico') {
 /** Envía el respaldo en un .zip a los correos de la administración (EMAIL_ADMINS). */
 async function emailBackup(id, fileName, json) {
   const c = emailConfig();
-  if (!c.admins.length) return;
+  if (!emailEnabled()) return markEmailError(id, 'Falta configurar BREVO_API_KEY o EMAIL_FROM en el servidor');
+  if (!c.admins.length) return markEmailError(id, 'Falta configurar EMAIL_ADMINS (correos de la administración) en el servidor');
   const zip = zipOne(fileName, json);
   const date = new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
   const text = `Respaldo del sistema del parqueadero del ${date}.\n\n`
@@ -91,8 +93,35 @@ async function emailBackup(id, fileName, json) {
       { name: fileName.replace(/\.json$/, '.zip'), content: zip.toString('base64') },
     ],
   });
-  if (r.ok) await sql`UPDATE respaldo SET enviado_correo_en = now() WHERE id = ${id}`;
-  else console.warn('[backup] no se pudo enviar por correo:', r.error);
+  if (r.ok) await sql`UPDATE respaldo SET enviado_correo_en = now(), error = NULL WHERE id = ${id}`;
+  else await markEmailError(id, `Brevo respondió ${r.status ?? ''}: ${r.error}`);
+}
+
+/** Deja escrito en el respaldo por qué no llegó al correo (el respaldo sí quedó guardado). */
+async function markEmailError(id, message) {
+  console.warn('[backup] no se pudo enviar por correo:', message);
+  await sql`UPDATE respaldo SET error = ${'No se envió por correo: ' + String(message).slice(0, 250)} WHERE id = ${id}`.catch(() => {});
+}
+
+/**
+ * Respaldo automático según la fecha del último, no según cuánto lleva encendido el servidor.
+ * En el plan gratuito de Render el servidor se apaga a los 15 minutos sin uso, así que un
+ * temporizador de 24 horas nunca alcanzaba a cumplirse. Ahora se revisa al arrancar y cada
+ * 15 minutos: si el último respaldo correcto tiene más de BACKUP_INTERVAL_HOURS, se hace uno.
+ */
+let backupRunning = false;
+export async function runDueBackup() {
+  if (backupRunning || config.backupIntervalHours <= 0) return null;
+  backupRunning = true;
+  try {
+    const [last] = await sql`SELECT creado_en FROM respaldo WHERE estado = 'ok' ORDER BY creado_en DESC LIMIT 1`;
+    const lastAt = last?.created_at;
+    const dueMs = config.backupIntervalHours * 3600_000;
+    if (lastAt && Date.now() - new Date(lastAt).getTime() < dueMs) return null;
+    return await runBackup('automatico');
+  } finally {
+    backupRunning = false;
+  }
 }
 
 /** Conserva solo los últimos BACKUP_KEEP respaldos (en la base y en el disco). */

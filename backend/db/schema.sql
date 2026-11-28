@@ -40,9 +40,14 @@ CREATE TABLE IF NOT EXISTS residente (
   deuda                   NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (deuda >= 0),
   puntaje_administrativo  SMALLINT      NOT NULL DEFAULT 0 CHECK (puntaje_administrativo BETWEEN 0 AND 5),
   tiene_discapacidad      BOOLEAN       NOT NULL DEFAULT FALSE,
+  tipo_residente          VARCHAR(15)   NOT NULL DEFAULT 'propietario'
+                          CHECK (tipo_residente IN ('propietario','arrendatario')),
   creado_en               TIMESTAMPTZ   NOT NULL DEFAULT now(),
   actualizado_en          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
+-- Bases creadas antes de distinguir propietario y arrendatario
+ALTER TABLE residente ADD COLUMN IF NOT EXISTS tipo_residente VARCHAR(15) NOT NULL DEFAULT 'propietario'
+  CHECK (tipo_residente IN ('propietario','arrendatario'));
 CREATE INDEX IF NOT EXISTS residente_vivienda_idx ON residente(vivienda_id);
 
 -- ---------------------------------------------------------------------

@@ -17,7 +17,8 @@ class ResidentsScreen extends StatefulWidget {
 
 class _ResidentsScreenState extends State<ResidentsScreen> {
   String _query = '';
-  bool _debtOnly = false;
+  // todos | deuda | propietario | arrendatario
+  String _filter = 'todos';
   Timer? _debounce;
   int _version = 0;
 
@@ -64,25 +65,39 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
             children: [
               ChoiceChip(
                 label: const Text('Todos'),
-                selected: !_debtOnly,
-                onSelected: (_) => setState(() => _debtOnly = false),
+                selected: _filter == 'todos',
+                onSelected: (_) => setState(() => _filter = 'todos'),
               ),
               ChoiceChip(
                 showCheckmark: false,
                 avatar: const Icon(Icons.money_off, size: 18, color: AppColors.red),
                 label: const Text('Con deuda'),
-                selected: _debtOnly,
-                onSelected: (_) => setState(() => _debtOnly = true),
+                selected: _filter == 'deuda',
+                onSelected: (_) => setState(() => _filter = 'deuda'),
+              ),
+              ChoiceChip(
+                showCheckmark: false,
+                avatar: const Icon(Icons.home, size: 18, color: AppColors.blue),
+                label: const Text('Propietarios'),
+                selected: _filter == 'propietario',
+                onSelected: (_) => setState(() => _filter = 'propietario'),
+              ),
+              ChoiceChip(
+                showCheckmark: false,
+                avatar: const Icon(Icons.key, size: 18, color: AppColors.amber),
+                label: const Text('Arrendatarios'),
+                selected: _filter == 'arrendatario',
+                onSelected: (_) => setState(() => _filter = 'arrendatario'),
               ),
             ],
           ),
         ),
         Expanded(
           child: Loader<List<Map<String, dynamic>>>(
-            key: ValueKey('$_query#$_debtOnly#$_version'),
+            key: ValueKey('$_query#$_filter#$_version'),
             load: () async => asList(await session.api.get('/residents', query: {
               'q': _query,
-              if (_debtOnly) 'filter': 'deuda',
+              if (_filter != 'todos') 'filter': _filter,
             })),
             reloadOn: const {'assignments'},
             builder: (context, list, reload) {
@@ -92,11 +107,13 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
                     // Se puede deslizar para actualizar también cuando la lista está vacía
                     ? ListView(children: [
                         EmptyView(
-                          message: _debtOnly
+                          message: _filter == 'deuda' && _query.isEmpty
                               ? 'Ningún residente tiene deuda: todos están al día'
-                              : _query.isEmpty
-                                  ? 'Aún no hay residentes. Toque «Agregar» para registrar el primero'
-                                  : 'No se encontraron residentes con «$_query»',
+                              : _filter == 'propietario' || _filter == 'arrendatario'
+                                  ? 'No hay ${_filter}s${_query.isEmpty ? '' : ' con «$_query»'}'
+                                  : _query.isEmpty
+                                      ? 'Aún no hay residentes. Toque «Agregar» para registrar el primero'
+                                      : 'No se encontraron residentes con «$_query»',
                         ),
                       ])
                     : ListView.builder(
@@ -153,6 +170,7 @@ class _ResidentTile extends StatelessWidget {
     final inactive = asStr(r['status']) != 'activo';
     final current = r['current_assignment'] == null ? null : asMap(r['current_assignment']);
     final warnings = <Widget>[
+      residentTypePill(r['resident_type']),
       if (inactive) const Pill('Inactivo', color: AppColors.grey),
       if (debt > 0) Pill('Deuda ${fmtMoney(debt)}', color: AppColors.red),
       if (debt > 0)
@@ -258,6 +276,7 @@ class _ResidentDetailScreenState extends State<ResidentDetailScreen> {
                     runSpacing: 12,
                     children: [
                       _info('Estado', asStr(r['status'])),
+                      _info('Vive en la casa como', residentTypeLabel(r['resident_type'])),
                       _info('Teléfono', asStr(r['phone'], '—')),
                       _info('Correo', asStr(r['email'], '—')),
                       _info('Deuda administración', fmtMoney(r['debt'])),
@@ -497,6 +516,7 @@ Future<Map<String, dynamic>?> showResidentForm(BuildContext context, {Map<String
   final username = TextEditingController();
   final password = TextEditingController(text: 'residente123');
   String docType = asStr(existing?['document_type'], 'CC');
+  String residentType = asStr(existing?['resident_type'], 'propietario');
   String vehicleType = 'carro';
   String status = asStr(existing?['status'], 'activo');
   int score = asInt(existing?['admin_score']);
@@ -542,6 +562,18 @@ Future<Map<String, dynamic>?> showResidentForm(BuildContext context, {Map<String
                   controller: house,
                   keyboardType: TextInputType.number,
                   decoration: inputDeco('Número de casa *', hint: '150', helper: 'Del 1 al 300'),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'propietario', icon: Icon(Icons.home), label: Text('Propietario')),
+                      ButtonSegment(value: 'arrendatario', icon: Icon(Icons.key), label: Text('Arrendatario')),
+                    ],
+                    selected: {residentType},
+                    onSelectionChanged: (s) => setState(() => residentType = s.first),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -670,6 +702,7 @@ Future<Map<String, dynamic>?> showResidentForm(BuildContext context, {Map<String
                 'debt': double.tryParse(debt.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0,
                 'admin_score': score,
                 'has_disability': disability,
+                'resident_type': residentType,
                 if (!isNew) 'status': status,
                 if (isNew && hasVehicle && plate.text.trim().isNotEmpty)
                   'vehicle': {'plate': normalizePlate(plate.text), 'type': vehicleType},
@@ -780,3 +813,10 @@ class _ResidentPickerState extends State<_ResidentPicker> {
     );
   }
 }
+
+/// Propietario o arrendatario (inquilino) de la casa.
+String residentTypeLabel(dynamic type) => asStr(type) == 'arrendatario' ? 'Arrendatario' : 'Propietario';
+
+Widget residentTypePill(dynamic type) => asStr(type) == 'arrendatario'
+    ? const Pill('Arrendatario', color: AppColors.amber)
+    : const Pill('Propietario', color: AppColors.blue);

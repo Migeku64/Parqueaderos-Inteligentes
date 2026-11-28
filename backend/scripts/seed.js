@@ -8,6 +8,7 @@ import { confirmDraw } from '../src/services/draw.js';
 import { demoName } from './nombres_demo.js';
 import { demoPlate, demoVehicleInfo, demoVehicleType } from './placas_demo.js';
 import { demoDebt } from './deudas_demo.js';
+import { demoResidentType } from './tipos_demo.js';
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -61,9 +62,9 @@ async function main() {
       const [h] = await tx`INSERT INTO vivienda (bloque, numero) VALUES ('', ${number})
                            ON CONFLICT (bloque, numero) DO UPDATE SET numero = EXCLUDED.numero RETURNING id`;
       const [r] = await tx`
-        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, correo, deuda, puntaje_administrativo, tiene_discapacidad, creado_en)
+        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, correo, deuda, puntaje_administrativo, tiene_discapacidad, tipo_residente, creado_en)
         VALUES (${h.id}, ${name}, ${doc}, ${'3' + doc.slice(-9).padStart(9, '0')},
-                ${name.split(' ')[0].toLowerCase() + '@correo.com'}, ${debt}, ${score}, ${disability}, ${createdAt})
+                ${name.split(' ')[0].toLowerCase() + '@correo.com'}, ${debt}, ${score}, ${disability}, ${demoResidentType(number)}, ${createdAt})
         RETURNING id`;
       if (plate) {
         await tx`INSERT INTO vehiculo (residente_id, placa, tipo, marca, modelo, color)
@@ -86,9 +87,9 @@ async function main() {
                            ON CONFLICT (bloque, numero) DO UPDATE SET numero = EXCLUDED.numero RETURNING id`;
       const doc = String(1100000000 + i * 7919);
       const [r] = await tx`
-        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, deuda, puntaje_administrativo, creado_en)
+        INSERT INTO residente (vivienda_id, nombre_completo, numero_documento, telefono, deuda, puntaje_administrativo, tipo_residente, creado_en)
         VALUES (${h.id}, ${name}, ${doc}, ${'31' + String(20000000 + i * 131).padStart(8, '0')},
-                ${i % 8 === 0 ? demoDebt(i) : 0}, ${i % 13 === 0 ? 1 : 0}, ${createdAt}) RETURNING id`;
+                ${i % 8 === 0 ? demoDebt(i) : 0}, ${i % 13 === 0 ? 1 : 0}, ${demoResidentType(number)}, ${createdAt}) RETURNING id`;
       if (i % 5 !== 4) {
         const type = demoVehicleType(i);
         const plate = demoPlate(i, type, takenPlates);
@@ -100,6 +101,10 @@ async function main() {
                VALUES (${'casa' + number}, ${name}, ${residentPw}, 'residente', ${r.id})`;
       i++;
     }
+
+    // Las casas arrendadas quedan marcadas como no habitadas por el propietario
+    await tx`UPDATE vivienda h SET habitada_por_propietario = NOT EXISTS (
+               SELECT 1 FROM residente r WHERE r.vivienda_id = h.id AND r.tipo_residente = 'arrendatario')`;
 
     const adminPw = await hashPassword('admin123');
     await tx`INSERT INTO cuenta_usuario (usuario, nombre_completo, hash_contrasena, rol)
